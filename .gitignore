@@ -1,0 +1,93 @@
+# ===========================
+# MAVEN
+# ===========================
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+HELP.md
+
+# ===========================
+# VARIÁVEIS DE AMBIENTE
+# ===========================
+.env
+# .env.example NÃO deve ser ignorado — ele deve ir para o Git
+
+# ===========================
+# INTELLIJ IDEA
+# ===========================
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# ===========================
+# ECLIPSE / STS
+# ===========================
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+# ===========================
+# NETBEANS
+# ===========================
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# ===========================
+# VS CODE
+# ===========================
+.vscode/
+
+# ===========================
+# SISTEMA OPERACIONAL
+# ===========================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ===========================
+# LOGS
+# ===========================
+*.log
+logs/
+spring.log
+
+# ===========================
+# DOCKER
+# ===========================
+# Ignorar override local do compose (configurações pessoais de dev)
+docker-compose.override.yml
+
+# ===========================
+# ARQUIVOS TEMPORÁRIOS / GERADOS
+# ===========================
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
