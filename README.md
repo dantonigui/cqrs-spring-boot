@@ -183,16 +183,6 @@ SERVER_PORT=8080
 
 > O arquivo `.env` já está incluído no `.gitignore`. Nunca o remova dessa lista.
 
-Crie também um arquivo `.env.example` com os campos sem valores para orientar outros desenvolvedores:
-
-```env
-DB_URL=
-DB_USERNAME=
-DB_PASSWORD=
-KAFKA_BOOTSTRAP_SERVERS=
-SERVER_PORT=
-```
-
 ---
 
 ## Estrutura de Pacotes
