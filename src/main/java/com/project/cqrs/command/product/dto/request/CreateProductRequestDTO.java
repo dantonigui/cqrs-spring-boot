@@ -17,11 +17,11 @@ public record CreateProductRequestDTO(
     @Size(min = 1, message = "The product code must be longer than 5 characters")
     String productCode,
 
-    @NotNull
+    @NotNull(message = "The product price cannot be zero")
     @DecimalMin(value = "0.01", message = "The product price must be greater than 0")
     BigDecimal productPrice,
 
-    @NotBlank
+    @NotBlank(message = "The product code is required")
     @Size(min = 5, message = "The product image must be longer than 5 characters")
     String productImage,
 

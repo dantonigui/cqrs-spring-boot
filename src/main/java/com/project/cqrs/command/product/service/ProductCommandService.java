@@ -10,7 +10,7 @@ import com.project.cqrs.command.product.event.ProductUpdateEvent;
 import com.project.cqrs.command.product.kafka.producer.ProductEventProducer;
 import com.project.cqrs.command.product.model.ProductCommandEntity;
 import com.project.cqrs.command.product.repository.ProductRepository;
-import jakarta.persistence.EntityNotFoundException;
+import com.project.cqrs.config.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,34 +28,36 @@ public class ProductCommandService {
 
     public void createProduct(CreateProductRequestDTO productDto) {
         CategoryCommandEntity category = categoryRepository.findById(productDto.categoryId())
-                .orElseThrow(() -> new RuntimeException("Category Not Found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found" + productDto.categoryId()));
 
         ProductCommandEntity product = ProductCommandEntity.createProduct(productDto.productName(), productDto.productCode(), productDto.productPrice(), productDto.productImage(), category);
 
-        productRepository.save(product);
+        ProductCommandEntity savedProduct = productRepository.saveAndFlush(product);
 
-        ProductCreateEvent event = ProductCreateEvent.fromEntity(product);
-        eventProducer.sendProductCreated(product.getProductId().toString(), event);
+        ProductCreateEvent event = ProductCreateEvent.fromEntity(savedProduct);
+        eventProducer.sendProductCreated(savedProduct.getProductId().toString(), event);
     }
 
     public void updateProduct(Long id, UpdateProductRequestDTO requestDTO) {
         ProductCommandEntity  productEntity = productRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Product Not Found with id" + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found" + id));
 
         CategoryCommandEntity categoryCommandEntity = categoryRepository.findById(requestDTO.categoryId())
-                .orElseThrow(() -> new RuntimeException("Category Not Found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Category Not Found" + requestDTO.categoryId()));
 
         requestDTO.applyTo(productEntity, categoryCommandEntity);
 
         ProductUpdateEvent event = ProductUpdateEvent.fromEntity(productEntity);
         eventProducer.sendProductUpdated(productEntity.getProductId().toString(), event);
+
+        productRepository.save(productEntity);
     }
 
 
 
     public void deleteProduct(Long id) {
             ProductCommandEntity product = productRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Product Not Found with id" + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product Not Found with id" + id));
 
             productRepository.delete(product);
 

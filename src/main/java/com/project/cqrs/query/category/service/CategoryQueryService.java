@@ -1,7 +1,7 @@
 package com.project.cqrs.query.category.service;
 
+import com.project.cqrs.config.exception.ResourceNotFoundException;
 import com.project.cqrs.query.category.dto.response.CategoryQueryDTO;
-import com.project.cqrs.query.category.kafka.consumer.CategoryEventConsumer;
 import com.project.cqrs.query.category.repository.CategoryQueryRepository;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +21,7 @@ public class CategoryQueryService {
     }
 
     public CategoryQueryDTO findById(Long id) {
-        return categoryQueryRepository.findById(id).map(CategoryQueryDTO::from).orElse(null);
+        return categoryQueryRepository.findById(id).map(CategoryQueryDTO::from)
+                .orElseThrow(() -> new ResourceNotFoundException("Category with id " + id + " not found"));
     }
 }

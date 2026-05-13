@@ -1,5 +1,6 @@
 package com.project.cqrs.query.product.service;
 
+import com.project.cqrs.config.exception.ResourceNotFoundException;
 import com.project.cqrs.query.product.dto.response.ProductQueryDTO;
 import com.project.cqrs.query.product.repository.ProductQueryRepository;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,6 @@ public class ProductQueryService {
     public ProductQueryDTO findById(Long id) {
         return productRepository.findById(id)
                 .map(ProductQueryDTO::from)
-                .orElseThrow(()-> new RuntimeException("product not found"));
+                .orElseThrow(()-> new ResourceNotFoundException("Product not found" + id));
     }
 }
