@@ -11,7 +11,7 @@ public class CategoryQueryEntity {
 
     private String categoryName;
 
-    public CategoryQueryEntity() {}
+    protected CategoryQueryEntity() {}
 
     public CategoryQueryEntity(Long categoryId, String categoryName) {
         this.categoryId = categoryId;
