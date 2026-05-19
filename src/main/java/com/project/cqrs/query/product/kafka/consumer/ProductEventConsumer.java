@@ -1,8 +1,8 @@
 package com.project.cqrs.query.product.kafka.consumer;
 
-import com.project.cqrs.command.product.event.ProductCreateEvent;
-import com.project.cqrs.command.product.event.ProductDeleteEvent;
-import com.project.cqrs.command.product.event.ProductUpdateEvent;
+import com.project.cqrs.shared.event.product.ProductCreateEvent;
+import com.project.cqrs.shared.event.product.ProductDeleteEvent;
+import com.project.cqrs.shared.event.product.ProductUpdateEvent;
 import com.project.cqrs.query.product.model.ProductQueryEntity;
 import com.project.cqrs.query.product.repository.ProductQueryRepository;
 import org.springframework.kafka.annotation.KafkaListener;

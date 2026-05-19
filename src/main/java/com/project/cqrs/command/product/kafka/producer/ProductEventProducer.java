@@ -1,8 +1,8 @@
 package com.project.cqrs.command.product.kafka.producer;
 
-import com.project.cqrs.command.product.event.ProductCreateEvent;
-import com.project.cqrs.command.product.event.ProductDeleteEvent;
-import com.project.cqrs.command.product.event.ProductUpdateEvent;
+import com.project.cqrs.shared.event.product.ProductCreateEvent;
+import com.project.cqrs.shared.event.product.ProductDeleteEvent;
+import com.project.cqrs.shared.event.product.ProductUpdateEvent;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
