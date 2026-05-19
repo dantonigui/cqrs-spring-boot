@@ -1,9 +1,8 @@
 package com.project.cqrs.command.category.kafka.producer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.project.cqrs.command.category.event.CategoryCreateEvent;
-import com.project.cqrs.command.category.event.CategoryDeleteEvent;
-import com.project.cqrs.command.category.event.CategoryUpdateEvent;
+import com.project.cqrs.shared.event.category.CategoryCreateEvent;
+import com.project.cqrs.shared.event.category.CategoryDeleteEvent;
+import com.project.cqrs.shared.event.category.CategoryUpdateEvent;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
