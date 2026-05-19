@@ -1,4 +1,4 @@
-package com.project.cqrs.command.product.event;
+package com.project.cqrs.shared.event.product;
 
 import com.project.cqrs.command.product.model.ProductCommandEntity;
 

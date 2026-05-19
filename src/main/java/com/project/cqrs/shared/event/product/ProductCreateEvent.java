@@ -1,10 +1,10 @@
-package com.project.cqrs.command.product.event;
+package com.project.cqrs.shared.event.product;
 
 import com.project.cqrs.command.product.model.ProductCommandEntity;
 
 import java.math.BigDecimal;
 
-public class ProductUpdateEvent {
+public class ProductCreateEvent {
 
     private Long productId;
     private String productName;
@@ -14,26 +14,25 @@ public class ProductUpdateEvent {
     private Long categoryId;
 
     //Constructors
-    public ProductUpdateEvent(Long productId, String productName, String productCode, BigDecimal productPrice, String productImage, Long categoryId) {
+    public ProductCreateEvent(Long productId, String productName, String productCode, BigDecimal productPrice, String productImage, Long categoryId) {
         this.productId = productId;
         this.productName = productName;
         this.productCode = productCode;
         this.productPrice = productPrice;
         this.productImage = productImage;
         this.categoryId = categoryId;
-
     }
 
-    public ProductUpdateEvent() {}
+    protected ProductCreateEvent() {}
 
-    public static ProductUpdateEvent fromEntity(ProductCommandEntity productCommandEntity) {
-        return  new ProductUpdateEvent(
-                productCommandEntity.getProductId(),
-                productCommandEntity.getProductName(),
-                productCommandEntity.getProductCode(),
-                productCommandEntity.getProductPrice(),
-                productCommandEntity.getProductImage(),
-                productCommandEntity.getCategoryCommandEntity().getCategoryId()
+    public static ProductCreateEvent fromEntity(ProductCommandEntity productEntity) {
+        return new ProductCreateEvent(
+                productEntity.getProductId(),
+                productEntity.getProductName(),
+                productEntity.getProductCode(),
+                productEntity.getProductPrice(),
+                productEntity.getProductImage(),
+                productEntity.getCategoryCommandEntity().getCategoryId()
         );
     }
 
@@ -45,7 +44,6 @@ public class ProductUpdateEvent {
     public String getProductName() {
         return productName;
     }
-
     public String getProductCode() {
         return productCode;
     }

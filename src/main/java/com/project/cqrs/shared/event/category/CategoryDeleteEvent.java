@@ -1,4 +1,4 @@
-package com.project.cqrs.command.category.event;
+package com.project.cqrs.shared.event.category;
 
 
 import com.project.cqrs.command.category.model.CategoryCommandEntity;
