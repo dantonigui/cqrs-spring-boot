@@ -1,12 +1,9 @@
 package com.project.cqrs.config.kafka;
 
-import com.project.cqrs.config.exception.ErrorResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -15,7 +12,6 @@ import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.util.backoff.FixedBackOff;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,12 +30,12 @@ public class KafkaConsumerConfig {
         config.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
         config.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, true);
         config.put(JsonDeserializer.TYPE_MAPPINGS,
-                "categoryCreate:com.project.cqrs.command.category.event.CategoryCreateEvent," +
-                        "categoryUpdate:com.project.cqrs.command.category.event.CategoryUpdateEvent," +
-                        "categoryDelete:com.project.cqrs.command.category.event.CategoryDeleteEvent," +
-                        "productCreate:com.project.cqrs.command.product.event.ProductCreateEvent," +
-                        "productUpdate:com.project.cqrs.command.product.event.ProductUpdateEvent," +
-                        "productDelete:com.project.cqrs.command.product.event.ProductDeleteEvent"
+                "categoryCreate:com.project.cqrs.shared.event.category.CategoryCreateEvent," +
+                        "categoryUpdate:com.project.cqrs.shared.event.category.CategoryUpdateEvent," +
+                        "categoryDelete:com.project.cqrs.shared.event.category.CategoryDeleteEvent," +
+                        "productCreate:com.project.cqrs.shared.event.product.ProductCreateEvent," +
+                        "productUpdate:com.project.cqrs.shared.event.product.ProductUpdateEvent," +
+                        "productDelete:com.project.cqrs.shared.event.product.ProductDeleteEvent"
         );
 
         return new DefaultKafkaConsumerFactory<>(config);

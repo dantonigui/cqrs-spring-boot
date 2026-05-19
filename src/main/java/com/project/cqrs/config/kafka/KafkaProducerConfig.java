@@ -30,12 +30,12 @@ public class KafkaProducerConfig {
         // Adicione estas duas linhas:
         config.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, true);
         config.put(JsonSerializer.TYPE_MAPPINGS,
-                "categoryCreate:com.project.cqrs.command.category.event.CategoryCreateEvent," +
-                        "categoryUpdate:com.project.cqrs.command.category.event.CategoryUpdateEvent," +
-                        "categoryDelete:com.project.cqrs.command.category.event.CategoryDeleteEvent," +
-                        "productCreate:com.project.cqrs.command.product.event.ProductCreateEvent," +
-                        "productUpdate:com.project.cqrs.command.product.event.ProductUpdateEvent," +
-                        "productDelete:com.project.cqrs.command.product.event.ProductDeleteEvent"
+                "categoryCreate:com.project.cqrs.shared.event.category.CategoryCreateEvent," +
+                        "categoryUpdate:com.project.cqrs.shared.event.category.CategoryUpdateEvent," +
+                        "categoryDelete:com.project.cqrs.shared.event.category.CategoryDeleteEvent," +
+                        "productCreate:com.project.cqrs.shared.event.product.ProductCreateEvent," +
+                        "productUpdate:com.project.cqrs.shared.event.product.ProductUpdateEvent," +
+                        "productDelete:com.project.cqrs.shared.event.product.ProductDeleteEvent"
         );
 
         return new DefaultKafkaProducerFactory<>(config);
