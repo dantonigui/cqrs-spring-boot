@@ -24,7 +24,7 @@ public record UserQueryDTO(
 ) {
     public static UserQueryDTO from (UserQueryEntity userQueryEntity) {
         return new UserQueryDTO(
-                userQueryEntity.getId(),
+                userQueryEntity.getUserId(),
                 userQueryEntity.getUserName(),
                 userQueryEntity.getUserEmail(),
                 userQueryEntity.getUserRole()
