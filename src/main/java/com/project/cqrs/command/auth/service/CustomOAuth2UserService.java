@@ -4,8 +4,10 @@ import com.project.cqrs.command.auth.infra.kafka.UserEventProducer;
 import com.project.cqrs.command.auth.model.UserCommandEntity;
 import com.project.cqrs.command.auth.model.UserRole;
 import com.project.cqrs.command.auth.repository.UserCommandRepository;
+import com.project.cqrs.config.admin.AdminConfig;
 import com.project.cqrs.shared.event.user.UserCreatedEvent;
 import com.project.cqrs.shared.event.user.UserUpdatedEvent;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
@@ -21,10 +23,12 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     private final UserCommandRepository userCommandRepository;
     private final UserEventProducer userEventProducer;
+    private final AdminConfig  adminConfig;
 
-    public CustomOAuth2UserService(UserCommandRepository userCommandRepository, UserEventProducer userEventProducer) {
+    public CustomOAuth2UserService(UserCommandRepository userCommandRepository, UserEventProducer userEventProducer, AdminConfig adminConfig) {
         this.userCommandRepository = userCommandRepository;
         this.userEventProducer = userEventProducer;
+        this.adminConfig = adminConfig;
     }
 
     @Override
@@ -33,11 +37,11 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         Map<String, Object> attributes = oAuth2User.getAttributes();
 
         String email = (String) attributes.get("email");
-        String googleId = (String) attributes.get("googleId");
+        String googleId = (String) attributes.get("sub");
         String name = (String) attributes.get("name");
         String picture = (String) attributes.get("picture");
 
-        UserCommandEntity userCommandEntity = userCommandRepository.findByGoogleId(googleId)
+        UserCommandEntity userCommandEntity = userCommandRepository.findByUserGoogleId(googleId)
                 .map(existing -> {
                     existing.syncFromGoogle(email);
                     UserCommandEntity saved =  userCommandRepository.save(existing);
@@ -46,7 +50,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
                     return  saved;
                 }).orElseGet(() -> {
-                    UserCommandEntity newUser = UserCommandEntity.createUser(name, email, picture, googleId, UserRole.USER);
+
+                    UserRole role= adminConfig.isAdmin(email) ? UserRole.ADMIN : UserRole.USER;
+
+                    UserCommandEntity newUser = UserCommandEntity.createUser(name, email, picture, googleId, role);
 
                     UserCommandEntity saved = userCommandRepository.save(newUser);
 
