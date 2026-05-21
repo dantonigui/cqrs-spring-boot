@@ -32,7 +32,7 @@ public class OAuth2AuthSucessHandler extends SimpleUrlAuthenticationSuccessHandl
         var oAuth2User = (DefaultOAuth2User) authentication.getPrincipal();
         String googleId = oAuth2User.getAttribute("sub");
 
-        UserCommandEntity  userCommandEntity = userCommandRepository.findByGoogleId(googleId)
+        UserCommandEntity  userCommandEntity = userCommandRepository.findByUserGoogleId(googleId)
                 .orElseThrow(() -> new IllegalStateException("User not found with googleId: " + googleId));
 
         String jwt = jwtTokenService.generateToken(userCommandEntity);
