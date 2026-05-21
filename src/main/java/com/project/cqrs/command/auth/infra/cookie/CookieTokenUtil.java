@@ -3,6 +3,7 @@ package com.project.cqrs.command.auth.infra.cookie;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
@@ -13,8 +14,11 @@ import java.util.Optional;
 @Component
 public class CookieTokenUtil {
 
-    private static final String COOKIE_NAME = "jwt_token";
-    private static final int MAX_AGE = 86400;
+    @Value("${app.cookie.name}")
+    private String COOKIE_NAME;
+
+    @Value("${app.cookie.max-age}")
+    private int COOKIE_MAX_AGE;
 
     public void writeToken(HttpServletResponse response, String token) {
         ResponseCookie cookie = buildCookie(token);
@@ -50,7 +54,7 @@ public class CookieTokenUtil {
                 .secure(true)
                 .sameSite("Strict")
                 .path("/")
-                .maxAge(MAX_AGE)
+                .maxAge(COOKIE_MAX_AGE)
                 .build();
     }
 }
