@@ -4,7 +4,10 @@ import com.project.cqrs.command.auth.model.UserCommandEntity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -19,13 +22,13 @@ public class JwtTokenService {
     private final SecretKey secretKey;
     private final long expirationTime;
 
-    private static final String ISSUER = "product-auth-service";
+    private static final String ISSUER = "auth-service";
 
     public static final String CLAIM_EMAIL = "email";
     public static final String CLAIM_ROLE  = "role";
 
-    public JwtTokenService(SecretKey secretKey, long expirationTime) {
-        this.secretKey = secretKey;
+    public JwtTokenService(@Value("${app.jwt.secret}") String secret, @Value("${app.jwt.expiration-ms}") long expirationTime) {
+        this.secretKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
         this.expirationTime = expirationTime;
     }
 
