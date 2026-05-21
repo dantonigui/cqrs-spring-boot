@@ -35,7 +35,10 @@ public class KafkaProducerConfig {
                         "categoryDelete:com.project.cqrs.shared.event.category.CategoryDeleteEvent," +
                         "productCreate:com.project.cqrs.shared.event.product.ProductCreateEvent," +
                         "productUpdate:com.project.cqrs.shared.event.product.ProductUpdateEvent," +
-                        "productDelete:com.project.cqrs.shared.event.product.ProductDeleteEvent"
+                        "productDelete:com.project.cqrs.shared.event.product.ProductDeleteEvent,"+
+                        "userCreated:com.project.cqrs.shared.event.user.UserCreatedEvent," +
+                        "userUpdated:com.project.cqrs.shared.event.user.UserUpdatedEvent," +
+                        "userLogout:com.project.cqrs.shared.event.user.UserLogoutEvent"
         );
 
         return new DefaultKafkaProducerFactory<>(config);
