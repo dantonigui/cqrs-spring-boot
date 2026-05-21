@@ -23,9 +23,11 @@
 
 ## Sobre o Projeto
 
-Este projeto tem como objetivo demonstrar de forma prática e didática a implementação do padrão **CQRS** em uma aplicação Java moderna. As entidades do domínio são `Product` (Produto) e `Category` (Categoria).
+Este projeto tem como objetivo demonstrar de forma prática e didática a implementação do padrão **CQRS** em uma aplicação Java moderna. As entidades do domínio são `Product` (Produto), `Category` (Categoria) e `User` (Usuário).
 
 O lado de **Command** é responsável por receber e processar operações de escrita (criar, atualizar, deletar), publicando eventos no **Apache Kafka**. O lado de **Query** consome esses eventos e mantém sua própria visão dos dados, otimizada para leitura.
+
+A autenticação é feita via **OAuth2 com Google**, gerando um **JWT armazenado em cookie HttpOnly** após o login bem-sucedido.
 
 ---
 
@@ -78,7 +80,7 @@ O lado de **Command** é responsável por receber e processar operações de esc
 command/
   └── Recebe requisições HTTP de escrita
   └── Valida e persiste no banco de dados de escrita
-  └── Publica eventos no Kafka (ex: ProductCreatedEvent)
+  └── Publica eventos no Kafka (ex: ProductCreatedEvent, UserCreatedEvent)
 
          │
          │  Kafka Topic
@@ -102,6 +104,9 @@ query/
 | Spring Data JPA | — | Persistência |
 | Spring Validation | — | Validação de DTOs |
 | Spring Actuator | — | Health check e métricas |
+| Spring Security | — | Autenticação e autorização |
+| Spring OAuth2 Client | — | Login com Google |
+| JJWT | — | Geração e validação de JWT |
 | Apache Kafka | — | Event streaming (Command → Query) |
 | MySQL | 8+ | Banco de dados relacional |
 | Lombok | — | Redução de boilerplate |
@@ -119,6 +124,7 @@ Antes de iniciar, certifique-se de ter instalado:
 - [Maven 3.8+](https://maven.apache.org/)
 - [Docker](https://www.docker.com/) e [Docker Compose](https://docs.docker.com/compose/)
 - [Git](https://git-scm.com/)
+- Uma conta no [Google Cloud Console](https://console.cloud.google.com) com credenciais OAuth2 configuradas
 
 ---
 
@@ -162,6 +168,15 @@ A aplicação estará disponível em: `http://localhost:8080`
 curl http://localhost:8080/actuator/health
 ```
 
+### 6. Faça login com Google
+
+Acesse no browser:
+```
+http://localhost:8080/oauth2/authorization/google
+```
+
+Após o login, o JWT será armazenado automaticamente em um cookie HttpOnly.
+
 ---
 
 ## Variáveis de Ambiente
@@ -177,11 +192,27 @@ DB_PASSWORD=sua_senha
 # === KAFKA ===
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 
+# === GOOGLE OAUTH2 ===
+GOOGLE_CLIENT_ID=seu_client_id
+GOOGLE_CLIENT_SECRET=seu_client_secret
+
+# === JWT ===
+JWT_SECRET=sua_chave_base64_minimo_32_bytes
+JWT_EXPIRATION_MS=86400000
+
+# === ADMIN ===
+ADMIN_EMAILS=seuemail@gmail.com
+
+# === FRONTEND ===
+FRONTEND_URL=http://localhost:3000
+
 # === APLICACAO ===
 SERVER_PORT=8080
 ```
 
 > O arquivo `.env` já está incluído no `.gitignore`. Nunca o remova dessa lista.
+
+> Para gerar um JWT secret seguro: `openssl rand -base64 32`
 
 ---
 
@@ -190,40 +221,64 @@ SERVER_PORT=8080
 ```
 src/main/java/com/project/cqrs/
 │
-├── config/                          # Configurações globais (Kafka, beans, etc.)
+├── config/                          # Configurações globais
+│   ├── admin/                       # AdminConfig — resolução de role por email
+│   ├── kafka/                       # KafkaProducerConfig, KafkaConsumerConfig
+│   └── security/                    # SecurityConfig — OAuth2, JWT filter e CORS
+│
+├── shared/                          # Compartilhado entre command e query
+│   └── event/
+│       ├── user/                    # UserEvent, UserCreatedEvent, UserUpdatedEvent, UserLogoutEvent
+│       ├── category/                # CategoryCreateEvent, CategoryUpdateEvent, CategoryDeleteEvent
+│       └── product/                 # ProductCreateEvent, ProductUpdateEvent, ProductDeleteEvent
 │
 ├── command/                         # LADO DE ESCRITA (Write Side)
+│   ├── auth/
+│   │   ├── controller/              # AuthCommandController (POST /logout)
+│   │   ├── infra/
+│   │   │   ├── cookie/              # CookieTokenUtil
+│   │   │   ├── kafka/               # UserEventProducer
+│   │   │   └── security/            # JwtTokenService, JwtAuthFilter, OAuth2AuthSuccessHandler
+│   │   ├── model/                   # UserCommandEntity, UserRole
+│   │   ├── repository/              # UserCommandRepository
+│   │   └── service/                 # CustomOAuth2UserService
+│   │
 │   ├── category/
 │   │   ├── controller/              # Endpoints REST de escrita para Category
-│   │   ├── dto/request/             # DTOs de entrada (ex: CreateCategoryRequest)
-│   │   ├── event/                   # Eventos publicados (ex: CategoryCreatedEvent)
-│   │   ├── kafka/producer/          # Produtores Kafka para Category
+│   │   ├── dto/request/             # DTOs de entrada
+│   │   ├── kafka/producer/          # CategoryEventProducer
 │   │   ├── model/                   # Entidade JPA do lado de escrita
 │   │   ├── repository/              # Repositório Spring Data JPA (escrita)
 │   │   └── service/                 # Lógica de negócio e orquestração
 │   │
 │   └── product/
 │       ├── controller/              # Endpoints REST de escrita para Product
-│       ├── dto/request/             # DTOs de entrada (ex: CreateProductRequest)
-│       ├── event/                   # Eventos publicados (ex: ProductCreatedEvent)
-│       ├── kafka/producer/          # Produtores Kafka para Product
+│       ├── dto/request/             # DTOs de entrada
+│       ├── kafka/producer/          # ProductEventProducer
 │       ├── model/                   # Entidade JPA do lado de escrita
 │       ├── repository/              # Repositório Spring Data JPA (escrita)
 │       └── service/                 # Lógica de negócio e orquestração
 │
 └── query/                           # LADO DE LEITURA (Read Side)
+    ├── auth/
+    │   ├── controller/              # AuthQueryController (GET /me)
+    │   ├── dto/                     # UserQueryDTO
+    │   ├── kafka/consumer/          # UserEventConsumer
+    │   ├── model/                   # UserQueryEntity
+    │   └── repository/              # UserQueryRepository
+    │
     ├── category/
     │   ├── controller/              # Endpoints REST de leitura para Category
-    │   ├── dto/response/            # DTOs de saída (ex: CategoryResponse)
-    │   ├── kafka/consumer/          # Consumidores Kafka — atualizam a projeção
-    │   ├── model/                   # Modelo de leitura (pode diferir do command)
+    │   ├── dto/response/            # DTOs de saída
+    │   ├── kafka/consumer/          # CategoryEventConsumer
+    │   ├── model/                   # Modelo de leitura
     │   ├── repository/              # Repositório Spring Data JPA (leitura)
     │   └── service/                 # Lógica de consulta e projeção
     │
     └── product/
         ├── controller/              # Endpoints REST de leitura para Product
-        ├── dto/response/            # DTOs de saída (ex: ProductResponse)
-        ├── kafka/consumer/          # Consumidores Kafka — atualizam a projeção
+        ├── dto/response/            # DTOs de saída
+        ├── kafka/consumer/          # ProductEventConsumer
         ├── model/                   # Modelo de leitura
         ├── repository/              # Repositório Spring Data JPA (leitura)
         └── service/                 # Lógica de consulta e projeção
@@ -233,10 +288,38 @@ src/main/java/com/project/cqrs/
 
 ## Fluxo de Dados
 
+### Autenticação
+
+```
+GET /oauth2/authorization/google
+        │
+        ▼
+Google OAuth2 (login e consentimento)
+        │
+        ▼
+CustomOAuth2UserService.loadUser()
+  ├── Busca ou cria o usuário no banco (Command DB)
+  ├── Atribui role ADMIN ou USER com base no email configurado
+  └── Publica UserCreatedEvent ou UserUpdatedEvent no Kafka
+        │
+        ▼
+OAuth2AuthSuccessHandler
+  ├── Gera JWT com userId, email e role
+  ├── Armazena JWT em cookie HttpOnly
+  └── Redireciona para o frontend
+        │
+        ▼
+Kafka Topic: user-created / user-updated
+        │
+        ▼
+UserEventConsumer
+  └── Sincroniza UserQueryEntity no banco de leitura (Query DB)
+```
+
 ### Escrita (Command Side)
 
 ```
-POST /api/command/products
+POST /api/v1/command/products
         │
         ▼
 ProductCommandController
@@ -251,16 +334,13 @@ ProductCommandService
 ### Leitura (Query Side)
 
 ```
-Kafka Topic: product-events
+Kafka Topic: product-created
         │
         ▼
-ProductKafkaConsumer
-        │
-        ▼
-ProductQueryService
+ProductEventConsumer
   └── Atualiza a projeção no banco de dados (Read DB)
 
-GET /api/query/products
+GET /api/v1/query/products
         │
         ▼
 ProductQueryController
@@ -274,37 +354,43 @@ ProductQueryService
 
 ## Endpoints
 
-> Os endpoints abaixo seguem a convenção adotada no projeto. Ajuste conforme necessário.
+### Autenticação
 
-### Category — Command (Escrita)
+| Método | Endpoint | Auth | Descrição |
+|---|---|---|---|
+| `GET` | `/oauth2/authorization/google` | Público | Inicia o fluxo OAuth2 com Google |
+| `GET` | `/api/v1/query/auth/me` | Autenticado | Retorna dados do usuário logado |
+| `POST` | `/api/v1/command/auth/logout` | Autenticado | Encerra a sessão e limpa o cookie |
 
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `POST` | `/api/command/categories` | Cria uma nova categoria |
-| `PUT` | `/api/command/categories/{id}` | Atualiza uma categoria |
-| `DELETE` | `/api/command/categories/{id}` | Remove uma categoria |
-
-### Category — Query (Leitura)
+### Category — Command (Escrita) — `ADMIN`
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `GET` | `/api/query/categories` | Lista todas as categorias |
-| `GET` | `/api/query/categories/{id}` | Busca categoria por ID |
+| `POST` | `/api/v1/command/categories` | Cria uma nova categoria |
+| `PUT` | `/api/v1/command/categories/{id}` | Atualiza uma categoria |
+| `DELETE` | `/api/v1/command/categories/{id}` | Remove uma categoria |
 
-### Product — Command (Escrita)
-
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `POST` | `/api/command/products` | Cria um novo produto |
-| `PUT` | `/api/command/products/{id}` | Atualiza um produto |
-| `DELETE` | `/api/command/products/{id}` | Remove um produto |
-
-### Product — Query (Leitura)
+### Category — Query (Leitura) — `Autenticado`
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `GET` | `/api/query/products` | Lista todos os produtos |
-| `GET` | `/api/query/products/{id}` | Busca produto por ID |
+| `GET` | `/api/v1/query/categories` | Lista todas as categorias |
+| `GET` | `/api/v1/query/categories/{id}` | Busca categoria por ID |
+
+### Product — Command (Escrita) — `ADMIN`
+
+| Método | Endpoint | Descrição |
+|---|---|---|
+| `POST` | `/api/v1/command/products` | Cria um novo produto |
+| `PUT` | `/api/v1/command/products/{id}` | Atualiza um produto |
+| `DELETE` | `/api/v1/command/products/{id}` | Remove um produto |
+
+### Product — Query (Leitura) — `Autenticado`
+
+| Método | Endpoint | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/query/products` | Lista todos os produtos |
+| `GET` | `/api/v1/query/products/{id}` | Busca produto por ID |
 
 ---
 
