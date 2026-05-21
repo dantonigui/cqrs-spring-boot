@@ -7,6 +7,6 @@ import java.util.Optional;
 
 public interface UserCommandRepository extends JpaRepository<UserCommandEntity, Long> {
 
-    Optional<UserCommandEntity> findByGoogleId(String googleId);
+    Optional<UserCommandEntity> findByUserGoogleId(String userGoogleId);
 
 }
