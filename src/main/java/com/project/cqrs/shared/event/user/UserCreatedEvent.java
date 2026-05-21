@@ -1,18 +1,23 @@
 package com.project.cqrs.shared.event.user;
 
 import com.project.cqrs.command.auth.model.UserCommandEntity;
+import com.project.cqrs.command.auth.model.UserRole;
 
 public final class UserCreatedEvent extends UserEvent{
 
-    private final String userName;
+    private  String userName;
 
-    private final String userEmail;
+    private  String userEmail;
 
-    private final String userPicture;
+    private  String userPicture;
 
-    private final String userRole;
+    private  UserRole userRole;
 
-    private UserCreatedEvent(Long userId, String userName, String userEmail, String userPicture, String userRole) {
+    public UserCreatedEvent() {
+        super();
+    }
+
+    private UserCreatedEvent(Long userId, String userName, String userEmail, String userPicture, UserRole userRole) {
         super(userId);
         this.userName = userName;
         this.userEmail = userEmail;
@@ -26,7 +31,7 @@ public final class UserCreatedEvent extends UserEvent{
                     userEntity.getUserName(),
                     userEntity.getUserEmail(),
                     userEntity.getUserPictureUrl(),
-                    userEntity.getUserRole().name()
+                    userEntity.getUserRole()
             );
     }
 
@@ -43,7 +48,7 @@ public final class UserCreatedEvent extends UserEvent{
         return userPicture;
     }
 
-    public String getUserRole() {
+    public UserRole getUserRole() {
         return userRole;
     }
 }
