@@ -4,9 +4,13 @@ import java.time.Instant;
 
 public abstract sealed class  UserEvent permits UserCreatedEvent, UserLogoutEvent, UserUpdatedEvent  {
 
-    private final Long userId;
+    private Long userId;
 
-    private final Instant occurredAt;
+    private  Instant occurredAt;
+
+    protected UserEvent(){
+
+    }
 
     protected UserEvent(Long userId) {
         this.userId = userId;
