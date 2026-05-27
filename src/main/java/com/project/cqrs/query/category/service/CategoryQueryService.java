@@ -3,6 +3,8 @@ package com.project.cqrs.query.category.service;
 import com.project.cqrs.config.exception.ResourceNotFoundException;
 import com.project.cqrs.query.category.dto.response.CategoryQueryDTO;
 import com.project.cqrs.query.category.repository.CategoryQueryRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,8 +18,9 @@ public class CategoryQueryService {
         this.categoryQueryRepository = categoryQueryRepository;
     }
 
-    public List<CategoryQueryDTO> findAllCategories() {
-        return categoryQueryRepository.findByOrderByCategoryNameAsc().stream().map(CategoryQueryDTO::from).toList();
+    public Page<CategoryQueryDTO> findAllCategories(Pageable  pageable) {
+        return categoryQueryRepository.findByOrderByCategoryNameAsc(pageable)
+                .map(CategoryQueryDTO::from);
     }
 
     public CategoryQueryDTO findById(Long id) {

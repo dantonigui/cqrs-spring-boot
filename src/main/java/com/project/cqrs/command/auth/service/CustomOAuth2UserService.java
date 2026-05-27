@@ -7,6 +7,8 @@ import com.project.cqrs.command.auth.repository.UserCommandRepository;
 import com.project.cqrs.config.admin.AdminConfig;
 import com.project.cqrs.shared.event.user.UserCreatedEvent;
 import com.project.cqrs.shared.event.user.UserUpdatedEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
@@ -21,6 +23,7 @@ import java.util.Map;
 @Service
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
+    private static final Logger log = LoggerFactory.getLogger(CustomOAuth2UserService.class);
     private final UserCommandRepository userCommandRepository;
     private final UserEventProducer userEventProducer;
     private final AdminConfig  adminConfig;
@@ -33,6 +36,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     @Override
     public OAuth2User loadUser (OAuth2UserRequest request) {
+        log.info("Loading user {} custom OAuth2UserService");
         OAuth2User oAuth2User = super.loadUser(request);
         Map<String, Object> attributes = oAuth2User.getAttributes();
 

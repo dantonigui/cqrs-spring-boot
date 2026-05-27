@@ -3,6 +3,8 @@ package com.project.cqrs.query.product.service;
 import com.project.cqrs.config.exception.ResourceNotFoundException;
 import com.project.cqrs.query.product.dto.response.ProductQueryDTO;
 import com.project.cqrs.query.product.repository.ProductQueryRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,11 +18,9 @@ public class ProductQueryService {
         this.productRepository = productRepository;
     }
 
-    public List<ProductQueryDTO> findAll() {
-        return productRepository.findByOrderByProductNameAsc()
-                .stream()
-                .map(ProductQueryDTO::from)
-                .toList();
+    public Page<ProductQueryDTO> findAll(Pageable pageable) {
+        return productRepository.findByOrderByProductNameAsc(pageable)
+                .map(ProductQueryDTO::from);
     }
 
     public ProductQueryDTO findById(Long id) {
