@@ -1,8 +1,12 @@
 package com.project.cqrs.query.category.controller;
 
 
+import com.project.cqrs.config.rateLimit.RateLimit;
 import com.project.cqrs.query.category.dto.response.CategoryQueryDTO;
 import com.project.cqrs.query.category.service.CategoryQueryService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,11 +25,13 @@ public class CategoryQueryController {
         this.categoryQueryService = categoryQueryService;
     }
 
+    @RateLimit(requests = 5, durationSeconds = 30)
     @GetMapping
-    public ResponseEntity<List<CategoryQueryDTO>> getCategories() {
-        return ResponseEntity.ok(categoryQueryService.findAllCategories());
+    public ResponseEntity<Page<CategoryQueryDTO>> getCategories(@PageableDefault Pageable pageable) {
+        return ResponseEntity.ok(categoryQueryService.findAllCategories(pageable));
     }
 
+    @RateLimit(requests = 5, durationSeconds = 30)
     @GetMapping("/{id}")
     public ResponseEntity<CategoryQueryDTO> findById(@PathVariable Long id) {
         return ResponseEntity.ok(categoryQueryService.findById(id));

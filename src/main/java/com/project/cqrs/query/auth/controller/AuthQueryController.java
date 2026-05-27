@@ -1,5 +1,6 @@
 package com.project.cqrs.query.auth.controller;
 
+import com.project.cqrs.config.rateLimit.RateLimit;
 import com.project.cqrs.query.auth.dto.UserQueryDTO;
 import com.project.cqrs.query.auth.model.UserQueryEntity;
 import com.project.cqrs.query.auth.repository.UserQueryRepository;
@@ -20,6 +21,7 @@ public class AuthQueryController {
         this.userQueryRepository = userQueryRepository;
     }
 
+    @RateLimit(requests = 32, durationSeconds = 30)
     @GetMapping("/me")
     public ResponseEntity<UserQueryDTO> me(Principal principal) {
         Long userId = Long.parseLong(principal.getName());

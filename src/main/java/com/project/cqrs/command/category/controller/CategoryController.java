@@ -4,6 +4,7 @@ package com.project.cqrs.command.category.controller;
 import com.project.cqrs.command.category.dto.request.CreateCategoryRequestDTO;
 import com.project.cqrs.command.category.dto.request.UpdateCategoryRequestDTO;
 import com.project.cqrs.command.category.service.CategoryCommandService;
+import com.project.cqrs.config.rateLimit.RateLimit;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +19,7 @@ public class CategoryController {
         this.categoryCommandService = categoryCommandService;
     }
 
-
+    @RateLimit(requests = 5, durationSeconds = 30)
     @PostMapping
     public ResponseEntity<Void> createCategory(@Valid @RequestBody CreateCategoryRequestDTO categoryRequestDTO) {
         categoryCommandService.createCategory(categoryRequestDTO);
@@ -26,6 +27,7 @@ public class CategoryController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
+    @RateLimit(requests = 5, durationSeconds = 30)
     @PutMapping("/{id}")
     public ResponseEntity<Void> updateCategory(@PathVariable Long id, @Valid @RequestBody UpdateCategoryRequestDTO categoryRequestDTO) {
         categoryCommandService.updateCategory(categoryRequestDTO, id);
@@ -33,6 +35,7 @@ public class CategoryController {
         return ResponseEntity.status(HttpStatus.OK).build();
     }
 
+    @RateLimit(requests = 5, durationSeconds = 30)
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
         categoryCommandService.deleteCategoryById(id);

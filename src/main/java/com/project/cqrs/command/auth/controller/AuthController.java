@@ -2,6 +2,7 @@ package com.project.cqrs.command.auth.controller;
 
 import com.project.cqrs.command.auth.infra.cookie.CookieTokenUtil;
 import com.project.cqrs.command.auth.infra.kafka.UserEventProducer;
+import com.project.cqrs.config.rateLimit.RateLimit;
 import com.project.cqrs.shared.event.user.UserLogoutEvent;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,6 +23,7 @@ public class AuthController {
         this.userEventProducer = userEventProducer;
     }
 
+    @RateLimit(requests = 5, durationSeconds = 30)
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletResponse response, Principal principal) {
         cookieTokenUtil.clearToken(response);
