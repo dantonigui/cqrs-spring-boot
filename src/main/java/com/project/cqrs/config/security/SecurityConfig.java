@@ -2,10 +2,11 @@ package com.project.cqrs.config.security;
 
 import com.project.cqrs.command.auth.infra.cookie.CookieTokenUtil;
 import com.project.cqrs.command.auth.infra.security.JwtAuthFilter;
-import com.project.cqrs.command.auth.infra.security.JwtTokenService;
+import com.project.cqrs.command.auth.service.JwtTokenService;
 import com.project.cqrs.command.auth.infra.security.OAuth2AuthSucessHandler;
 import com.project.cqrs.command.auth.service.CustomOAuth2UserService;
 import com.project.cqrs.command.auth.repository.UserCommandRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,12 +15,12 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 
 import java.util.List;
 
@@ -56,11 +57,37 @@ public class SecurityConfig {
 
                 // Stateless — JWT via cookie, sem sessão no servidor
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            String path = request.getRequestURI();
+
+                            // Deixa o Spring lidar normalmente com o fluxo OAuth2
+                            if (path.startsWith("/oauth2/")
+                                    || path.startsWith("/login/oauth2/")
+                                    || path.startsWith("/login")
+                                    || path.equals("/favicon.ico")
+                                    || path.equals("/error")) {
+                                return;
+                            }
+
+                            System.out.println("❌ 401 - Path: " + path);
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json");
+                            response.setCharacterEncoding("UTF-8");
+                            response.getWriter().write("{\"error\": \"Não autenticado\"}");
+                        })
+                )
 
                 .authorizeHttpRequests(auth -> auth
                         // Fluxo OAuth2 — sempre público
-                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                        .requestMatchers(
+                                "/oauth2/**",
+                                "/login/oauth2/**",
+                                "/login/**",
+                                "/error",
+                                "/favicon.ico"
+                        ).permitAll()
 
                         // Logout — qualquer autenticado
                         .requestMatchers(HttpMethod.POST, "/api/v1/command/auth/logout").authenticated()
@@ -75,6 +102,9 @@ public class SecurityConfig {
                 )
 
                 .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(auth -> auth
+                                .authorizationRequestRepository(new HttpSessionOAuth2AuthorizationRequestRepository())
+                        )
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(customOAuth2UserService))
                         .successHandler(oAuth2AuthSuccessHandler())
