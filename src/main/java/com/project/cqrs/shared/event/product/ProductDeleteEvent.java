@@ -2,23 +2,16 @@ package com.project.cqrs.shared.event.product;
 
 import com.project.cqrs.command.product.model.ProductCommandEntity;
 
-public class ProductDeleteEvent {
-
-    private Long productId;
+public final class ProductDeleteEvent extends ProductEvent {
 
     //Constructors
-    public ProductDeleteEvent(Long productId) {
-        this.productId = productId;
-    }
+    private ProductDeleteEvent() {}
 
-    public ProductDeleteEvent() {}
+    public ProductDeleteEvent(Long productId) {
+        super(productId);
+    }
 
     public static ProductDeleteEvent fromEntity(ProductCommandEntity productEntity) {
         return new ProductDeleteEvent(productEntity.getProductId());
-    }
-
-    // Getter
-    public Long getProductId() {
-        return productId;
     }
 }

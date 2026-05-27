@@ -20,7 +20,7 @@ public class UserEventConsumer {
         this.userQueryRepository = userQueryRepository;
     }
 
-    @KafkaListener(topics = "${app.kafka.topics.user-created}", groupId = "query-service")
+    @KafkaListener(topics = "${app.kafka.topics.user-created}", groupId = "user-group")
     public void onUserCreated(UserCreatedEvent userCreatedEvent) {
         log.info("Received UserCreatedEvent {}", userCreatedEvent);
 
@@ -33,7 +33,7 @@ public class UserEventConsumer {
         userQueryRepository.save(entity);
     }
 
-    @KafkaListener(topics = "${app.kafka.topics.user-updated}", groupId = "query-service")
+    @KafkaListener(topics = "${app.kafka.topics.user-updated}", groupId = "user-group")
     public void onUserUpdated(UserUpdatedEvent userUpdatedEvent) {
         log.info("Received UserUpdatedEvent {}", userUpdatedEvent);
 
@@ -44,7 +44,7 @@ public class UserEventConsumer {
                 }, () -> log.warn("User not found with id {}", userUpdatedEvent.getUserId()));
     }
 
-    @KafkaListener(topics = "${app.kafka.topics.user-logout}", groupId = "query-service")
+    @KafkaListener(topics = "${app.kafka.topics.user-logout}", groupId = "user-group")
     public void onUserLogout(UserLogoutEvent userLogoutEvent) {
         log.info("Received UserLogoutEvent {}", userLogoutEvent.getUserId());
     }

@@ -4,9 +4,8 @@ import com.project.cqrs.command.product.model.ProductCommandEntity;
 
 import java.math.BigDecimal;
 
-public class ProductUpdateEvent {
+public final class ProductUpdateEvent extends ProductEvent {
 
-    private Long productId;
     private String productName;
     private String productCode;
     private BigDecimal productPrice;
@@ -15,7 +14,7 @@ public class ProductUpdateEvent {
 
     //Constructors
     public ProductUpdateEvent(Long productId, String productName, String productCode, BigDecimal productPrice, String productImage, Long categoryId) {
-        this.productId = productId;
+        super(productId);
         this.productName = productName;
         this.productCode = productCode;
         this.productPrice = productPrice;
@@ -38,10 +37,6 @@ public class ProductUpdateEvent {
     }
 
     //Getters
-    public Long getProductId() {
-        return productId;
-    }
-
     public String getProductName() {
         return productName;
     }
