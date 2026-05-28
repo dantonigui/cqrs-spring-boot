@@ -6,7 +6,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record CreateUserRequestDTO(
-
         @NotBlank
         @Size(min = 3)
         String userName,
@@ -24,5 +23,4 @@ public record CreateUserRequestDTO(
         @NotBlank
         UserRole userRole
 ) {
-
 }
