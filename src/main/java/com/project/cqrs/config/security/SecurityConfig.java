@@ -1,8 +1,9 @@
 package com.project.cqrs.config.security;
 
 import com.project.cqrs.command.auth.infra.cookie.CookieTokenUtil;
+import com.project.cqrs.command.auth.infra.cookie.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.project.cqrs.command.auth.infra.security.JwtAuthFilter;
-import com.project.cqrs.command.auth.service.JwtTokenService;
+import com.project.cqrs.command.auth.infra.security.JwtTokenService;
 import com.project.cqrs.command.auth.infra.security.OAuth2AuthSucessHandler;
 import com.project.cqrs.command.auth.service.CustomOAuth2UserService;
 import com.project.cqrs.command.auth.repository.UserCommandRepository;
@@ -50,6 +51,11 @@ public class SecurityConfig {
     }
 
     @Bean
+    public HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository() {
+        return new HttpCookieOAuth2AuthorizationRequestRepository();
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -57,7 +63,8 @@ public class SecurityConfig {
 
                 // Stateless — JWT via cookie, sem sessão no servidor
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                                .sessionFixation().none())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
                             String path = request.getRequestURI();
@@ -71,7 +78,6 @@ public class SecurityConfig {
                                 return;
                             }
 
-                            System.out.println("❌ 401 - Path: " + path);
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             response.setContentType("application/json");
                             response.setCharacterEncoding("UTF-8");
@@ -103,7 +109,7 @@ public class SecurityConfig {
 
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(auth -> auth
-                                .authorizationRequestRepository(new HttpSessionOAuth2AuthorizationRequestRepository())
+                                .authorizationRequestRepository(cookieAuthorizationRequestRepository())
                         )
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(customOAuth2UserService))
@@ -121,6 +127,7 @@ public class SecurityConfig {
         return new OAuth2AuthSucessHandler(jwtTokenService, userCommandRepository, cookieTokenUtil);
     }
 
+    // CORS CONFIG
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
