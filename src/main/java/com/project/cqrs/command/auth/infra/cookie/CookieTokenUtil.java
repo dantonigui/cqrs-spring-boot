@@ -52,7 +52,7 @@ public class CookieTokenUtil {
         return ResponseCookie.from(COOKIE_NAME, value)
                 .httpOnly(true)
                 .secure(true)
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .path("/")
                 .maxAge(COOKIE_MAX_AGE)
                 .build();
