@@ -1,7 +1,6 @@
 package com.project.cqrs.command.auth.model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
 import lombok.Builder;
 
 @Entity
