@@ -1,5 +1,7 @@
 package com.project.cqrs.command.auth.infra.security;
 
+import com.project.cqrs.command.auth.dto.CreateUserRequestDTO;
+import com.project.cqrs.command.auth.dto.UserRequestDTO;
 import com.project.cqrs.command.auth.model.UserCommandEntity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -32,14 +34,14 @@ public class JwtTokenService {
         this.expirationTime = expirationTime;
     }
 
-    public String generateToken(UserCommandEntity userCommandEntity) {
+    public String generateToken(UserRequestDTO userRequestDTO) {
         Instant now = Instant.now();
-
+        log.info("Passei por aqui");
         return Jwts.builder()
                 .issuer(ISSUER)
-                .subject(userCommandEntity.getUserId().toString())
-                .claim(CLAIM_EMAIL, userCommandEntity.getUserEmail())
-                .claim(CLAIM_ROLE, userCommandEntity.getUserRole().name())
+                .subject(userRequestDTO.userId().toString())
+                .claim(CLAIM_EMAIL, userRequestDTO.userEmail())
+                .claim(CLAIM_ROLE, userRequestDTO.userRole().name())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationTime)))
                 .signWith(secretKey)

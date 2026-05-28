@@ -1,5 +1,6 @@
 package com.project.cqrs.command.auth.infra.security;
 
+import com.project.cqrs.command.auth.dto.UserRequestDTO;
 import com.project.cqrs.command.auth.infra.cookie.CookieTokenUtil;
 import com.project.cqrs.command.auth.model.UserCommandEntity;
 import com.project.cqrs.command.auth.repository.UserCommandRepository;
@@ -35,7 +36,9 @@ public class OAuth2AuthSucessHandler extends SimpleUrlAuthenticationSuccessHandl
         UserCommandEntity  userCommandEntity = userCommandRepository.findByUserGoogleId(googleId)
                 .orElseThrow(() -> new IllegalStateException("User not found with googleId: " + googleId));
 
-        String jwt = jwtTokenService.generateToken(userCommandEntity);
+        UserRequestDTO userDto = UserRequestDTO.from(userCommandEntity);
+
+        String jwt = jwtTokenService.generateToken(userDto);
 
         cookieTokenUtil.writeToken(response, jwt);
 
