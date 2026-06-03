@@ -3,6 +3,7 @@ package com.project.cqrs.query.product.controller;
 import com.project.cqrs.config.rateLimit.RateLimit;
 import com.project.cqrs.query.product.dto.response.ProductQueryDTO;
 import com.project.cqrs.query.product.service.ProductQueryService;
+import com.project.cqrs.shared.dto.PageResponseDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -26,7 +27,7 @@ public class ProductQueryController {
 
     @RateLimit(requests = 100, durationSeconds = 30)
     @GetMapping
-    public ResponseEntity<Page<ProductQueryDTO>> findAll(@PageableDefault(size = 15) Pageable pageable) {
+    public ResponseEntity<PageResponseDTO<ProductQueryDTO>> findAll(@PageableDefault(size = 15) Pageable pageable) {
         return ResponseEntity.ok(productQueryService.findAll(pageable));
     }
 
