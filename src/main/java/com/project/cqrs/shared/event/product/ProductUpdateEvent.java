@@ -56,4 +56,25 @@ public final class ProductUpdateEvent extends ProductEvent {
     public Long getCategoryId() {
         return categoryId;
     }
+
+    //Setters
+    public void setProductName(String productName) {
+        this.productName = productName;
+    }
+
+    public void setProductCode(String productCode) {
+        this.productCode = productCode;
+    }
+
+    public void setProductPrice(BigDecimal productPrice) {
+        this.productPrice = productPrice;
+    }
+
+    public void setProductImage(String productImage) {
+        this.productImage = productImage;
+    }
+
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
+    }
 }
