@@ -1,5 +1,7 @@
 package com.project.cqrs.query.product.model;
 
+import com.project.cqrs.shared.event.product.ProductCreateEvent;
+import com.project.cqrs.shared.event.product.ProductUpdateEvent;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,6 +32,26 @@ public class ProductQueryEntity {
         this.productPrice = productPrice;
         this.productImage = productImage;
         this.categoryId = categoryId;
+    }
+
+    public static ProductQueryEntity fromCreateEvent(ProductCreateEvent createEvent) {
+        return new ProductQueryEntity(
+                createEvent.getProductId(),
+                createEvent.getProductName(),
+                createEvent.getProductCode(),
+                createEvent.getProductPrice(),
+                createEvent.getProductImage(),
+                createEvent.getCategoryId()
+        );
+    }
+
+    public  void applyUpdatedEvent(ProductUpdateEvent updateEvent) {
+        this.productId = updateEvent.getProductId();
+        this.productName = updateEvent.getProductName();
+        this.productCode = updateEvent.getProductCode();
+        this.productPrice = updateEvent.getProductPrice();
+        this.productImage = updateEvent.getProductImage();
+        this.categoryId = updateEvent.getCategoryId();
     }
 
 }
