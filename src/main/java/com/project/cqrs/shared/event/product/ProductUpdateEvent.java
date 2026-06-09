@@ -3,6 +3,7 @@ package com.project.cqrs.shared.event.product;
 import com.project.cqrs.command.product.model.ProductCommandEntity;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public final class ProductUpdateEvent extends ProductEvent {
 

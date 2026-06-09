@@ -2,6 +2,8 @@ package com.project.cqrs.shared.event.product;
 
 import com.project.cqrs.command.product.model.ProductCommandEntity;
 
+import java.util.UUID;
+
 public final class ProductDeleteEvent extends ProductEvent {
 
     //Constructors

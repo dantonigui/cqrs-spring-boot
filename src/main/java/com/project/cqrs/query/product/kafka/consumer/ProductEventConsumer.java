@@ -1,5 +1,6 @@
 package com.project.cqrs.query.product.kafka.consumer;
 
+import com.project.cqrs.admin.idempotency.service.IdempotencyService;
 import com.project.cqrs.config.redis.RedisConfig;
 import com.project.cqrs.query.product.dto.response.ProductQueryDTO;
 import com.project.cqrs.shared.event.product.ProductCreateEvent;
@@ -22,14 +23,23 @@ public class ProductEventConsumer {
     private static final Logger log = LoggerFactory.getLogger(ProductEventConsumer.class);
     private final ProductQueryRepository repository;
     private final CacheManager cacheManager;
+    private final IdempotencyService idempotencyService;
 
-    public ProductEventConsumer(ProductQueryRepository repository, CacheManager cacheManager) {
+    public ProductEventConsumer(ProductQueryRepository repository, CacheManager cacheManager, IdempotencyService idempotencyService) {
         this.repository = repository;
         this.cacheManager = cacheManager;
+        this.idempotencyService = idempotencyService;
     }
 
     @KafkaListener(topics = "products-created", groupId = "product-group")
     public void OnProductCreated(ProductCreateEvent event) {
+
+        if (!idempotencyService.isNew(event.getEventId(),"product.created")) {
+            return;
+        }
+
+        log.info("Received product created event: eventId={}, productId={}", event.getEventId(), event.getProductId());
+
         ProductQueryEntity entity = ProductQueryEntity.fromCreateEvent(event);
 
         ProductQueryEntity saved =  repository.save(entity);
@@ -43,7 +53,12 @@ public class ProductEventConsumer {
 
     @KafkaListener(topics = "products-updated", groupId = "product-group")
     public void OnProductUpdated(ProductUpdateEvent event) {
-        log.info("Evento recebido: product.updated, id={}", event.getProductId());
+        if (!idempotencyService.isNew(event.getEventId(),"product.updated")) {
+            return;
+        }
+
+        log.info("Processando product.updated: eventId={}, productId={}",
+                event.getEventId(), event.getProductId());
 
         repository.findById(event.getProductId()).ifPresent(entity -> {
             entity.applyUpdatedEvent(event);
@@ -55,7 +70,14 @@ public class ProductEventConsumer {
 
     @KafkaListener(topics = "products-deleted", groupId = "product-group")
     public void OnProductDeleted(ProductDeleteEvent event) {
-        log.info("Evento recebido: product.deleted, id={}", event.getProductId());
+        if(!idempotencyService.isNew(event.getEventId(),"product.deleted")) {
+            return;
+        }
+
+
+        log.info("Processando product.deleted: eventId={}, productId={}",
+                event.getEventId(), event.getProductId());
+
         repository.deleteById(event.getProductId());
 
         evictDetailFromCache(event.getProductId());
