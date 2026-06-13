@@ -1,40 +1,42 @@
 # CQRS com Spring Boot, Kafka, MySQL e Redis
 
-> Projeto de estudo e referência sobre o padrão **CQRS (Command Query Responsibility Segregation)** implementado com Spring Boot 3, Apache Kafka, MySQL e Redis Cache — separando claramente as responsabilidades de escrita (Command) e leitura (Query), com camada de cache para alta performance nas consultas.
+![Java](https://img.shields.io/badge/Java-21-orange?style=flat-square&logo=openjdk)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.4.5-brightgreen?style=flat-square&logo=springboot)
+![Kafka](https://img.shields.io/badge/Apache_Kafka-Event_Streaming-black?style=flat-square&logo=apachekafka)
+![Redis](https://img.shields.io/badge/Redis-7.2-red?style=flat-square&logo=redis)
+![MySQL](https://img.shields.io/badge/MySQL-8+-blue?style=flat-square&logo=mysql)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker)
+![Status](https://img.shields.io/badge/Status-Em_desenvolvimento-yellow?style=flat-square)
+
+> Implementação de referência do padrão **CQRS (Command Query Responsibility Segregation)** com separação real de modelos de escrita e leitura, event streaming via Apache Kafka, cache distribuído com Redis e autenticação OAuth2 + JWT.
 
 ---
 
-## Índice
+## Motivação
 
-- [Sobre o Projeto](#sobre-o-projeto)
-- [Padrão CQRS](#padrão-cqrs)
-- [Arquitetura](#arquitetura)
-- [Tecnologias](#tecnologias)
-- [Pré-requisitos](#pré-requisitos)
-- [Como Executar](#como-executar)
-- [Variáveis de Ambiente](#variáveis-de-ambiente)
-- [Estrutura de Pacotes](#estrutura-de-pacotes)
-- [Fluxo de Dados](#fluxo-de-dados)
-- [Cache Redis](#cache-redis)
-- [Endpoints](#endpoints)
-- [Contribuindo](#contribuindo)
-- [Licença](#licença)
+Aplicações que crescem rapidamente enfrentam um problema clássico: **operações de leitura e escrita competem pelos mesmos recursos**. Um endpoint de busca paginada com filtros complexos não deveria disputar conexões de banco com operações transacionais de escrita.
+
+Este projeto demonstra como o padrão CQRS resolve esse problema na prática — não como exercício teórico, mas com uma implementação funcional que inclui consistência eventual via Kafka, cache inteligente com Redis e autenticação segura com OAuth2 + JWT em cookie HttpOnly.
+
+**Cada decisão tecnológica aqui tem um motivo.** Esse motivo está documentado abaixo.
 
 ---
 
-## Sobre o Projeto
+## Performance
 
-Este projeto tem como objetivo demonstrar de forma prática e didática a implementação do padrão **CQRS** em uma aplicação Java moderna. As entidades do domínio são `Product` (Produto), `Category` (Categoria) e `User` (Usuário).
+Benchmark realizado com [`hey`](https://github.com/rakyll/hey) no endpoint `GET /api/v1/query/products/{id}`:
 
-O lado de **Command** é responsável por receber e processar operações de escrita (criar, atualizar, deletar), publicando eventos no **Apache Kafka**. O lado de **Query** consome esses eventos, mantém sua própria visão dos dados otimizada para leitura e utiliza **Redis** como camada de cache para evitar consultas desnecessárias ao banco de dados.
+| Cenário | Latência média | Observação |
+|---|---|---|
+| **Sem Redis** (direto no MySQL) | 45ms | Cold path, todo request vai ao banco |
+| **Com Redis** (cache HIT) | 22ms | **51% mais rápido**, sem tocar o MySQL |
+| **1000 req / 50 concorrentes** (em breve) | — | *Resultados sendo coletados* |
 
-A autenticação é feita via **OAuth2 com Google**, gerando um **JWT armazenado em cookie HttpOnly** após o login bem-sucedido.
+> Novos benchmarks com carga real chegando em breve.
 
 ---
 
-## Padrão CQRS
-
-**CQRS** (Command Query Responsibility Segregation) é um padrão arquitetural que separa as operações de leitura das operações de escrita em modelos distintos.
+## Arquitetura
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -50,8 +52,8 @@ A autenticação é feita via **OAuth2 com Google**, gerando um **JWT armazenado
                        │                      │
             ┌──────────▼──────────┐  ┌────────┴────────┐
             │     Write Model     │  │   Redis Cache   │
-            │  (MySQL - Command)  │  │   (HIT → skip   │
-            └──────────┬──────────┘  │    MISS → DB)   │
+            │  (MySQL - Command)  │  │  HIT → retorna  │
+            └──────────┬──────────┘  │  MISS → MySQL   │
                        │             └────────▲────────┘
             ┌──────────▼──────────────────────┤
             │         Apache Kafka            │
@@ -64,40 +66,38 @@ A autenticação é feita via **OAuth2 com Google**, gerando um **JWT armazenado
                              └─────────────────────────────┘
 ```
 
-### Benefícios aplicados neste projeto
-
-| Benefício | Como se manifesta aqui |
-|---|---|
-| **Separação de responsabilidades** | Pacotes `command` e `query` completamente independentes |
-| **Escalabilidade independente** | Lado de leitura e escrita podem escalar separadamente |
-| **Desacoplamento** | Kafka desacopla producers (Command) de consumers (Query) |
-| **Modelos otimizados** | Cada lado possui seu próprio Model, Repository e Service |
-| **Performance de leitura** | Redis elimina consultas ao MySQL em cache HIT |
-| **Consistência eventual** | Consumer Kafka sincroniza cache após cada evento de escrita |
-
 ---
 
-## Arquitetura
+## Decisões Arquiteturais
 
-```
-command/
-  └── Recebe requisições HTTP de escrita
-  └── Valida e persiste no banco de dados de escrita
-  └── Invalida entradas do cache Redis (@CacheEvict)
-  └── Publica eventos no Kafka (ex: ProductCreatedEvent, UserCreatedEvent)
+> *"Usar tecnologia sem saber por quê é receita para complexidade desnecessária."*
 
-         │
-         │  Kafka Topic
-         ▼
+### Por que CQRS?
 
-query/
-  └── Consome eventos do Kafka
-  └── Atualiza a projeção de leitura no banco de dados
-  └── Sincroniza o cache Redis (put / evict por evento)
-  └── Serve requisições HTTP de leitura
-        └── Cache HIT  → retorna do Redis (sem tocar o MySQL)
-        └── Cache MISS → consulta MySQL, armazena no Redis e retorna
-```
+Em sistemas de leitura intensa, o modelo único de dados sofre com consultas complexas (joins, filtros, paginação) rodando no mesmo banco que recebe operações de escrita transacional. CQRS permite que cada lado evolua independentemente — o modelo de leitura pode ser desnormalizado para performance sem impactar a integridade do lado de escrita.
+
+**Alternativa considerada:** CRUD simples com um único repositório. Descartada porque não demonstra separação de responsabilidades nem escalabilidade independente.
+
+### Por que Kafka e não RabbitMQ?
+
+| Critério | Kafka | RabbitMQ |
+|---|---|---|
+| **Retenção de eventos** | Sim (log persistente) | Não (mensagem some após consumo) |
+| **Replay de eventos** | Sim | Não |
+| **Modelo** | Pull (consumer controla) | Push (broker controla) |
+| **Caso de uso ideal** | Event sourcing, CQRS | Task queues, RPC |
+
+Para CQRS, o Kafka é a escolha natural: se o consumer de leitura ficar fora do ar, ele pode **replay** os eventos perdidos ao voltar. Com RabbitMQ, os eventos seriam perdidos.
+
+### Por que Redis como cache?
+
+O lado de leitura do CQRS é otimizado para consultas frequentes. Sem cache, cada `GET /products/{id}` bate no MySQL — desnecessário para dados que mudam raramente. O Redis com TTL por cache (`product-detail`: 10min, `products`: 5min) elimina a maioria das queries de leitura sem sacrificar consistência.
+
+**A estratégia adotada é cache-aside + invalidação orientada a eventos**: o Command Side invalida o cache ao escrever, e o Consumer Kafka sincroniza após processar o evento.
+
+### Por que OAuth2 + JWT em cookie HttpOnly?
+
+JWT em `localStorage` é vulnerável a ataques XSS. Armazenar o token em cookie HttpOnly (inacessível via JavaScript) elimina esse vetor de ataque, mantendo a autenticação stateless.
 
 ---
 
@@ -107,39 +107,25 @@ query/
 |---|---|---|
 | Java | 21 | Linguagem principal |
 | Spring Boot | 3.4.5 | Framework principal |
-| Spring Web | — | API REST |
+| Spring Security + OAuth2 | — | Autenticação via Google + JWT |
 | Spring Data JPA | — | Persistência |
-| Spring Validation | — | Validação de DTOs |
-| Spring Actuator | — | Health check e métricas |
-| Spring Security | — | Autenticação e autorização |
-| Spring OAuth2 Client | — | Login com Google |
-| Spring Cache | — | Abstração de cache com `@Cacheable` / `@CacheEvict` |
-| Spring Data Redis | — | Integração com Redis via Lettuce |
-| Redis | 7.2 | Cache distribuído (TTL por cache, política LRU) |
-| JJWT | — | Geração e validação de JWT |
+| Spring Cache + Redis | — | Cache distribuído (`@Cacheable`, `@CacheEvict`) |
 | Apache Kafka | — | Event streaming (Command → Query) |
 | MySQL | 8+ | Banco de dados relacional |
-| Commons Pool2 | — | Pool de conexões Lettuce |
+| Redis | 7.2 | Cache distribuído com TTL e política LRU |
+| JJWT | — | Geração e validação de JWT |
+| Docker + Compose | — | Infraestrutura local em um comando |
 | Lombok | — | Redução de boilerplate |
-| Jackson | — | Serialização JSON |
-| Docker + Compose | — | Infraestrutura local |
-| spring-dotenv | 3.0.0 | Variáveis de ambiente via `.env` |
-
----
-
-## Pré-requisitos
-
-Antes de iniciar, certifique-se de ter instalado:
-
-- [Java 21+](https://adoptium.net/)
-- [Maven 3.8+](https://maven.apache.org/)
-- [Docker](https://www.docker.com/) e [Docker Compose](https://docs.docker.com/compose/)
-- [Git](https://git-scm.com/)
-- Uma conta no [Google Cloud Console](https://console.cloud.google.com) com credenciais OAuth2 configuradas
 
 ---
 
 ## Como Executar
+
+### Pré-requisitos
+
+- [Java 21+](https://adoptium.net/)
+- [Docker](https://www.docker.com/) e [Docker Compose](https://docs.docker.com/compose/)
+- Credenciais OAuth2 do [Google Cloud Console](https://console.cloud.google.com)
 
 ### 1. Clone o repositório
 
@@ -152,19 +138,16 @@ cd cqrs-spring-boot
 
 ```bash
 cp .env.example .env
-# Edite o .env com suas configurações
+# Edite o .env com suas configurações (veja seção abaixo)
 ```
 
-### 3. Suba a infraestrutura com Docker
+### 3. Suba toda a infraestrutura
 
 ```bash
 docker-compose up -d
 ```
 
-Isso irá inicializar:
-- MySQL (banco de dados)
-- Apache Kafka + Zookeeper (broker de mensagens)
-- Redis (cache distribuído)
+Isso inicializa: MySQL · Apache Kafka + Zookeeper · Redis
 
 ### 4. Execute a aplicação
 
@@ -172,28 +155,25 @@ Isso irá inicializar:
 ./mvnw spring-boot:run
 ```
 
-A aplicação estará disponível em: `http://localhost:8080`
+Acesse: `http://localhost:8080`
 
-### 5. Verifique a saúde da aplicação
+### 5. Autentique-se com Google
+
+```
+http://localhost:8080/oauth2/authorization/google
+```
+
+O JWT é armazenado automaticamente em cookie HttpOnly após o login.
+
+### 6. Verifique a saúde
 
 ```bash
 curl http://localhost:8080/actuator/health
 ```
 
-### 6. Faça login com Google
-
-Acesse no browser:
-```
-http://localhost:8080/oauth2/authorization/google
-```
-
-Após o login, o JWT será armazenado automaticamente em um cookie HttpOnly.
-
 ---
 
 ## Variáveis de Ambiente
-
-Crie um arquivo `.env` na raiz do projeto com base no exemplo abaixo. **Nunca versione o `.env` real com credenciais.**
 
 ```env
 # === BANCO DE DADOS ===
@@ -227,9 +207,8 @@ FRONTEND_URL=http://localhost:3000
 SERVER_PORT=8080
 ```
 
-> O arquivo `.env` já está incluído no `.gitignore`. Nunca o remova dessa lista.
-
-> Para gerar um JWT secret seguro: `openssl rand -base64 32`
+> Gere um JWT secret seguro com: `openssl rand -base64 32`
+> O `.env` está no `.gitignore`. Nunca o remova.
 
 ---
 
@@ -238,101 +217,32 @@ SERVER_PORT=8080
 ```
 src/main/java/com/project/cqrs/
 │
-├── config/                          # Configurações globais
-│   ├── admin/                       # AdminConfig — resolução de role por email
-│   ├── kafka/                       # KafkaProducerConfig, KafkaConsumerConfig
-│   ├── redis/                       # RedisConfig, CacheService, CacheAdminController
-│   └── security/                    # SecurityConfig — OAuth2, JWT filter e CORS
+├── config/                    # Configurações globais
+│   ├── admin/                 # Resolução de role por email
+│   ├── kafka/                 # KafkaProducerConfig, KafkaConsumerConfig
+│   ├── redis/                 # RedisConfig, CacheService, CacheAdminController
+│   └── security/              # SecurityConfig — OAuth2, JWT filter, CORS
 │
-├── shared/                          # Compartilhado entre command e query
+├── shared/                    # Eventos compartilhados entre Command e Query
 │   └── event/
-│       ├── user/                    # UserEvent, UserCreatedEvent, UserUpdatedEvent, UserLogoutEvent
-│       ├── category/                # CategoryCreateEvent, CategoryUpdateEvent, CategoryDeleteEvent
-│       └── product/                 # ProductCreateEvent, ProductUpdateEvent, ProductDeleteEvent
+│       ├── user/              # UserCreatedEvent, UserUpdatedEvent, UserLogoutEvent
+│       ├── category/          # CategoryCreateEvent, CategoryUpdateEvent, CategoryDeleteEvent
+│       └── product/           # ProductCreateEvent, ProductUpdateEvent, ProductDeleteEvent
 │
-├── command/                         # LADO DE ESCRITA (Write Side)
-│   ├── auth/
-│   │   ├── controller/              # AuthCommandController (POST /logout)
-│   │   ├── infra/
-│   │   │   ├── cookie/              # CookieTokenUtil
-│   │   │   ├── kafka/               # UserEventProducer
-│   │   │   └── security/            # JwtTokenService, JwtAuthFilter, OAuth2AuthSuccessHandler
-│   │   ├── model/                   # UserCommandEntity, UserRole
-│   │   ├── repository/              # UserCommandRepository
-│   │   └── service/                 # CustomOAuth2UserService
-│   │
-│   ├── category/
-│   │   ├── controller/              # Endpoints REST de escrita para Category
-│   │   ├── dto/request/             # DTOs de entrada
-│   │   ├── kafka/producer/          # CategoryEventProducer
-│   │   ├── model/                   # Entidade JPA do lado de escrita
-│   │   ├── repository/              # Repositório Spring Data JPA (escrita)
-│   │   └── service/                 # Lógica de negócio, orquestração e @CacheEvict
-│   │
-│   └── product/
-│       ├── controller/              # Endpoints REST de escrita para Product
-│       ├── dto/request/             # DTOs de entrada
-│       ├── kafka/producer/          # ProductEventProducer
-│       ├── model/                   # Entidade JPA do lado de escrita
-│       ├── repository/              # Repositório Spring Data JPA (escrita)
-│       └── service/                 # Lógica de negócio, orquestração e @CacheEvict
+├── command/                   # ✍️ WRITE SIDE
+│   ├── auth/                  # OAuth2, JWT, logout
+│   ├── category/              # CRUD de escrita para Category
+│   └── product/               # CRUD de escrita para Product
 │
-└── query/                           # LADO DE LEITURA (Read Side)
-    ├── auth/
-    │   ├── controller/              # AuthQueryController (GET /me)
-    │   ├── dto/                     # UserQueryDTO
-    │   ├── kafka/consumer/          # UserEventConsumer
-    │   ├── model/                   # UserQueryEntity
-    │   └── repository/              # UserQueryRepository
-    │
-    ├── category/
-    │   ├── controller/              # Endpoints REST de leitura para Category
-    │   ├── dto/response/            # DTOs de saída
-    │   ├── kafka/consumer/          # CategoryEventConsumer (sincroniza cache)
-    │   ├── model/                   # Modelo de leitura
-    │   ├── repository/              # Repositório Spring Data JPA (leitura)
-    │   └── service/                 # Lógica de consulta, projeção e @Cacheable
-    │
-    └── product/
-        ├── controller/              # Endpoints REST de leitura para Product
-        ├── dto/response/            # DTOs de saída (PageResponseDTO, ProductQueryDTO)
-        ├── kafka/consumer/          # ProductEventConsumer (sincroniza cache Redis)
-        ├── model/                   # Modelo de leitura
-        ├── repository/              # Repositório Spring Data JPA (leitura)
-        └── service/                 # Lógica de consulta, projeção e @Cacheable
+└── query/                     # 📖 READ SIDE
+    ├── auth/                  # GET /me, consumer de eventos de usuário
+    ├── category/              # Consultas de Category com cache
+    └── product/               # Consultas de Product com cache paginado
 ```
 
 ---
 
 ## Fluxo de Dados
-
-### Autenticação
-
-```
-GET /oauth2/authorization/google
-        │
-        ▼
-Google OAuth2 (login e consentimento)
-        │
-        ▼
-CustomOAuth2UserService.loadUser()
-  ├── Busca ou cria o usuário no banco (Command DB)
-  ├── Atribui role ADMIN ou USER com base no email configurado
-  └── Publica UserCreatedEvent ou UserUpdatedEvent no Kafka
-        │
-        ▼
-OAuth2AuthSuccessHandler
-  ├── Gera JWT com userId, email e role
-  ├── Armazena JWT em cookie HttpOnly
-  └── Redireciona para o frontend
-        │
-        ▼
-Kafka Topic: user-created / user-updated
-        │
-        ▼
-UserEventConsumer
-  └── Sincroniza UserQueryEntity no banco de leitura (Query DB)
-```
 
 ### Escrita (Command Side)
 
@@ -340,47 +250,58 @@ UserEventConsumer
 POST /api/v1/command/products
         │
         ▼
-ProductCommandController
-        │
-        ▼
-ProductCommandService
+ProductCommandController → ProductCommandService
   ├── Valida o DTO
-  ├── Persiste no banco de dados (Write DB)
-  ├── Invalida entradas do cache Redis (@CacheEvict)
+  ├── Persiste no MySQL (Write DB)
+  ├── Invalida cache Redis (@CacheEvict)
   └── Publica ProductCreatedEvent no Kafka
 ```
 
 ### Leitura (Query Side)
 
 ```
-GET /api/v1/query/products
-        │
-        ▼
-ProductQueryController
+GET /api/v1/query/products/{id}
         │
         ▼
 ProductQueryService (@Cacheable)
   ├── Cache HIT  → retorna do Redis (MySQL não é consultado)
-  └── Cache MISS → consulta MySQL, armazena no Redis e retorna
+  └── Cache MISS → consulta MySQL, armazena no Redis, retorna
 
-Kafka Topic: product-created / product-updated / product-deleted
+Kafka: product-created / product-updated / product-deleted
         │
         ▼
 ProductEventConsumer
-  ├── Atualiza a projeção no banco de dados (Read DB)
-  └── Sincroniza o Redis:
+  ├── Persiste no MySQL (Read DB)
+  └── Sincroniza Redis:
         ├── CREATE → put detalhe no cache + evict lista
-        ├── UPDATE → atualiza detalhe no cache + evict lista
+        ├── UPDATE → atualiza detalhe + evict lista
         └── DELETE → evict detalhe + evict lista
+```
+
+### Autenticação
+
+```
+GET /oauth2/authorization/google
+        │
+        ▼
+Google OAuth2 → CustomOAuth2UserService
+  ├── Cria ou atualiza usuário no Command DB
+  ├── Atribui role ADMIN ou USER por email
+  └── Publica UserCreatedEvent/UserUpdatedEvent no Kafka
+        │
+        ▼
+OAuth2AuthSuccessHandler
+  ├── Gera JWT (userId, email, role)
+  ├── Armazena em cookie HttpOnly
+  └── Redireciona para o frontend
+        │
+        ▼
+UserEventConsumer → sincroniza UserQueryEntity no Read DB
 ```
 
 ---
 
 ## Cache Redis
-
-### Estratégia
-
-O projeto adota **cache-aside** no lado de leitura combinado com **invalidação orientada a eventos** via Kafka.
 
 | Cache | Chave | TTL | Invalidado por |
 |---|---|---|---|
@@ -388,51 +309,15 @@ O projeto adota **cache-aside** no lado de leitura combinado com **invalidação
 | `product-detail` | `{id}` | 10 min | update, delete do produto |
 | `categories` | — | 30 min | create, update, delete de categoria |
 
-### Fluxo de cache
-
-```
-GET /api/v1/query/products/{id}
-        │
-        ▼
- Redis HIT? ──── YES ──→ retorna DTO (sem tocar o MySQL)
-        │
-       NO
-        │
-        ▼
-  Consulta MySQL
-        │
-        ▼
-  Armazena no Redis com TTL
-        │
-        ▼
-  Retorna DTO
-```
-
-### Sincronização via Kafka
-
-```
-ProductCommandService          Kafka              ProductEventConsumer
-        │                        │                        │
-  POST/PUT/DELETE                │                        │
-        │──── @CacheEvict ───▶   │                        │
-        │──── publica evento ──▶ │                        │
-                                 │ ──── consome ────────▶ │
-                                 │                  persiste no MySQL
-                                 │                  sincroniza Redis
-                                 │                  (put / evict)
-```
-
-### Endpoints administrativos de cache
+### Endpoints administrativos
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `DELETE` | `/admin/cache/products` | Invalida toda a lista paginada |
-| `DELETE` | `/admin/cache/product-detail/{id}` | Invalida o detalhe de um produto |
-| `DELETE` | `/admin/cache/all` | Limpa todos os caches de produto |
-| `GET` | `/admin/cache/stats/{id}` | Retorna status HIT/MISS e TTL restante |
-| `GET` | `/admin/cache/keys` | Lista chaves em cache (uso diagnóstico) |
-
-> Em produção, proteja esses endpoints com `@PreAuthorize("hasRole('ADMIN')")`.
+| `DELETE` | `/admin/cache/products` | Invalida cache da lista paginada |
+| `DELETE` | `/admin/cache/product-detail/{id}` | Invalida cache do detalhe |
+| `DELETE` | `/admin/cache/all` | Limpa todos os caches |
+| `GET` | `/admin/cache/stats/{id}` | Status HIT/MISS e TTL restante |
+| `GET` | `/admin/cache/keys` | Lista chaves em cache (diagnóstico) |
 
 ---
 
@@ -442,54 +327,53 @@ ProductCommandService          Kafka              ProductEventConsumer
 
 | Método | Endpoint | Auth | Descrição |
 |---|---|---|---|
-| `GET` | `/oauth2/authorization/google` | Público | Inicia o fluxo OAuth2 com Google |
-| `GET` | `/api/v1/query/auth/me` | Autenticado | Retorna dados do usuário logado |
-| `POST` | `/api/v1/command/auth/logout` | Autenticado | Encerra a sessão e limpa o cookie |
+| `GET` | `/oauth2/authorization/google` | Público | Inicia fluxo OAuth2 |
+| `GET` | `/api/v1/query/auth/me` | Autenticado | Dados do usuário logado |
+| `POST` | `/api/v1/command/auth/logout` | Autenticado | Encerra sessão |
 
-### Category — Command (Escrita) — `ADMIN`
-
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `POST` | `/api/v1/command/categories` | Cria uma nova categoria |
-| `PUT` | `/api/v1/command/categories/{id}` | Atualiza uma categoria |
-| `DELETE` | `/api/v1/command/categories/{id}` | Remove uma categoria |
-
-### Category — Query (Leitura) — `Autenticado`
+### Category — Command `ADMIN`
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `GET` | `/api/v1/query/categories` | Lista todas as categorias |
-| `GET` | `/api/v1/query/categories/{id}` | Busca categoria por ID |
+| `POST` | `/api/v1/command/categories` | Cria categoria |
+| `PUT` | `/api/v1/command/categories/{id}` | Atualiza categoria |
+| `DELETE` | `/api/v1/command/categories/{id}` | Remove categoria |
 
-### Product — Command (Escrita) — `ADMIN`
-
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `POST` | `/api/v1/command/products` | Cria um novo produto |
-| `PUT` | `/api/v1/command/products/{id}` | Atualiza um produto |
-| `DELETE` | `/api/v1/command/products/{id}` | Remove um produto |
-
-### Product — Query (Leitura) — `Autenticado`
+### Category — Query `Autenticado`
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `GET` | `/api/v1/query/products` | Lista todos os produtos (paginado) |
-| `GET` | `/api/v1/query/products/{id}` | Busca produto por ID |
+| `GET` | `/api/v1/query/categories` | Lista categorias |
+| `GET` | `/api/v1/query/categories/{id}` | Busca por ID |
 
-### Cache — Admin — `ADMIN`
+### Product — Command `ADMIN`
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `DELETE` | `/admin/cache/products` | Invalida cache da lista de produtos |
-| `DELETE` | `/admin/cache/product-detail/{id}` | Invalida cache do detalhe |
-| `DELETE` | `/admin/cache/all` | Limpa todos os caches de produto |
-| `GET` | `/admin/cache/stats/{id}` | Status HIT/MISS e TTL de um produto |
-| `GET` | `/admin/cache/keys` | Lista chaves em cache (diagnóstico) |
+| `POST` | `/api/v1/command/products` | Cria produto |
+| `PUT` | `/api/v1/command/products/{id}` | Atualiza produto |
+| `DELETE` | `/api/v1/command/products/{id}` | Remove produto |
+
+### Product — Query `Autenticado`
+
+| Método | Endpoint | Descrição |
+|---|---|---|
+| `GET` | `/api/v1/query/products` | Lista produtos (paginado) |
+| `GET` | `/api/v1/query/products/{id}` | Busca por ID |
+
+---
+
+##  Roadmap
+
+- [ ] Deploy em ambiente cloud (Railway + Upstash)
+- [ ] Benchmarks com 1000+ requisições e concorrência real
+- [ ] Testes unitários e de integração
+- [ ] Frontend React consumindo a API
 
 ---
 
 <div align="center">
 
-Feito com Java por [Guilherme D'Antoni](https://github.com/dantonigui)
+Feito com ☕ por [Guilherme D'Antoni](https://github.com/dantonigui)
 
 </div>
