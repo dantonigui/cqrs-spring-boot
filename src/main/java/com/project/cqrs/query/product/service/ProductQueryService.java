@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -27,6 +28,7 @@ public class ProductQueryService {
     @Cacheable(cacheNames = RedisConfig.CACHE_PRODUCTS,
             key = "'page-' + #pageable.pageNumber + '-size-' + #pageable.pageSize",
             unless = "#result == null || #result.content().isEmpty()")
+    @Transactional(readOnly = true)
     public PageResponseDTO<ProductQueryDTO> findAll(Pageable pageable) {
 
         log.debug("Cache MISS — buscando produtos no MySQL. Page: {}", pageable.getPageNumber());
@@ -50,6 +52,7 @@ public class ProductQueryService {
             key = "#id",
             unless = "#result == null"
     )
+    @Transactional(readOnly = true)
     public ProductQueryDTO findById(Long id) {
         return productRepository.findById(id)
                 .map(ProductQueryDTO::from)
