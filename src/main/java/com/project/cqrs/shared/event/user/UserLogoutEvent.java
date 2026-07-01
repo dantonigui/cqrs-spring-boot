@@ -6,6 +6,8 @@ public final class UserLogoutEvent extends UserEvent {
         super(userId);
     }
 
+    private UserLogoutEvent() {}
+
     public static UserLogoutEvent logoutEvent(Long userId) {
         return new UserLogoutEvent(userId);
     }
