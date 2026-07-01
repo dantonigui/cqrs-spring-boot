@@ -4,6 +4,8 @@ package com.project.cqrs.query.category.controller;
 import com.project.cqrs.config.rateLimit.RateLimit;
 import com.project.cqrs.query.category.dto.response.CategoryQueryDTO;
 import com.project.cqrs.query.category.service.CategoryQueryService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -27,13 +29,19 @@ public class CategoryQueryController {
 
     @RateLimit(requests = 5, durationSeconds = 30)
     @GetMapping
-    public ResponseEntity<Page<CategoryQueryDTO>> getCategories(@PageableDefault Pageable pageable) {
+    @Operation(summary = "Search allCategories")
+    @ApiResponse(responseCode = "200", description = "All categories founds")
+    @ApiResponse(responseCode = "404", description = "Not found all categories")
+    public ResponseEntity<Page<CategoryQueryDTO>> getAllCategories(@PageableDefault Pageable pageable) {
         return ResponseEntity.ok(categoryQueryService.findAllCategories(pageable));
     }
 
     @RateLimit(requests = 5, durationSeconds = 30)
     @GetMapping("/{id}")
-    public ResponseEntity<CategoryQueryDTO> findById(@PathVariable Long id) {
+    @Operation(summary = "Search category for ID")
+    @ApiResponse(responseCode = "200", description = "Category Found")
+    @ApiResponse(responseCode = "404", description = "Category not Found")
+    public ResponseEntity<CategoryQueryDTO> findCategoriesById(@PathVariable Long id) {
         return ResponseEntity.ok(categoryQueryService.findById(id));
     }
 }
