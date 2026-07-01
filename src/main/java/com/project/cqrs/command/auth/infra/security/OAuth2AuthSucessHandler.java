@@ -18,11 +18,13 @@ public class OAuth2AuthSucessHandler extends SimpleUrlAuthenticationSuccessHandl
     private final JwtTokenService jwtTokenService;
     private final UserCommandRepository userCommandRepository;
     private final CookieTokenUtil cookieTokenUtil;
+    private final RefreshTokenService refreshTokenService;
 
-    public OAuth2AuthSucessHandler(JwtTokenService jwtTokenService, UserCommandRepository userCommandRepository, CookieTokenUtil cookieTokenUtil) {
+    public OAuth2AuthSucessHandler(JwtTokenService jwtTokenService, UserCommandRepository userCommandRepository, CookieTokenUtil cookieTokenUtil,  RefreshTokenService refreshTokenService) {
         this.jwtTokenService = jwtTokenService;
         this.userCommandRepository = userCommandRepository;
         this.cookieTokenUtil = cookieTokenUtil;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Value("${app.frontend-url:http://localhost:3000}")
@@ -38,9 +40,11 @@ public class OAuth2AuthSucessHandler extends SimpleUrlAuthenticationSuccessHandl
 
         UserRequestDTO userDto = UserRequestDTO.from(userCommandEntity);
 
-        String jwt = jwtTokenService.generateToken(userDto);
+        String accessToken = jwtTokenService.generateToken(userDto);
+        cookieTokenUtil.writeToken(response,accessToken);
 
-        cookieTokenUtil.writeToken(response, jwt);
+        String refreshToken = refreshTokenService.generate(userCommandEntity.getUserId().toString());
+        cookieTokenUtil.writeRefreshToken(response, refreshToken);
 
         getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/");
     }
