@@ -5,6 +5,7 @@ import com.project.cqrs.command.auth.infra.cookie.HttpCookieOAuth2AuthorizationR
 import com.project.cqrs.command.auth.infra.security.JwtAuthFilter;
 import com.project.cqrs.command.auth.infra.security.JwtTokenService;
 import com.project.cqrs.command.auth.infra.security.OAuth2AuthSucessHandler;
+import com.project.cqrs.command.auth.infra.security.RefreshTokenService;
 import com.project.cqrs.command.auth.service.CustomOAuth2UserService;
 import com.project.cqrs.command.auth.repository.UserCommandRepository;
 import jakarta.servlet.http.HttpServletResponse;
@@ -34,6 +35,7 @@ public class SecurityConfig {
     private final JwtTokenService jwtTokenService;
     private final UserCommandRepository userCommandRepository;
     private final CookieTokenUtil cookieTokenUtil;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
@@ -42,12 +44,14 @@ public class SecurityConfig {
                           JwtAuthFilter jwtAuthFilter,
                           JwtTokenService jwtTokenService,
                           UserCommandRepository userCommandRepository,
-                          CookieTokenUtil cookieTokenUtil) {
+                          CookieTokenUtil cookieTokenUtil,
+                          RefreshTokenService refreshTokenService) {
         this.customOAuth2UserService = customOAuth2UserService;
         this.jwtAuthFilter = jwtAuthFilter;
         this.jwtTokenService = jwtTokenService;
         this.userCommandRepository = userCommandRepository;
         this.cookieTokenUtil = cookieTokenUtil;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Bean
@@ -92,11 +96,16 @@ public class SecurityConfig {
                                 "/login/oauth2/**",
                                 "/login/**",
                                 "/error",
-                                "/favicon.ico"
+                                "/favicon.ico",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**"
                         ).permitAll()
 
                         // Logout — qualquer autenticado
                         .requestMatchers(HttpMethod.POST, "/api/v1/command/auth/logout").authenticated()
+
+                        .requestMatchers(HttpMethod.POST, "/api/v1/command/auth/logout-all").authenticated()
 
                         // Query — qualquer autenticado (USER e ADMIN)
                         .requestMatchers("/api/v1/query/**").authenticated()
@@ -124,7 +133,7 @@ public class SecurityConfig {
 
     @Bean
     public OAuth2AuthSucessHandler oAuth2AuthSuccessHandler() {
-        return new OAuth2AuthSucessHandler(jwtTokenService, userCommandRepository, cookieTokenUtil);
+        return new OAuth2AuthSucessHandler(jwtTokenService, userCommandRepository, cookieTokenUtil, refreshTokenService);
     }
 
     // CORS CONFIG
