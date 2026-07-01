@@ -1,6 +1,7 @@
 package com.project.cqrs.command.auth.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
 import lombok.Builder;
 
 @Entity
@@ -13,6 +14,7 @@ public class UserCommandEntity {
 
     private String userName;
 
+    @Email
     private String userEmail;
 
     private String userPictureUrl;
