@@ -23,6 +23,7 @@ public class AuthQueryController {
 
     @RateLimit(requests = 32, durationSeconds = 30)
     @GetMapping("/me")
+
     public ResponseEntity<UserQueryDTO> me(Principal principal) {
         Long userId = Long.parseLong(principal.getName());
 
