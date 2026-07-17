@@ -4,27 +4,24 @@ import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
 import com.mercadopago.resources.payment.Payment;
-import com.project.cqrs.command.payment.model.PaymentStatus;
-import com.project.cqrs.command.payment.repository.PaymentRepository;
+import com.project.cqrs.shared.enums.PaymentStatus;
+import com.project.cqrs.command.payment.repository.PaymentCommandRepository;
 import com.project.cqrs.command.payment.service.PaymentApprovalService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Map;
 
 @Service
 public class MercadoPagoWebhookProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(MercadoPagoWebhookProcessor.class);
 
-    private final PaymentRepository paymentRepository;
+    private final PaymentCommandRepository paymentCommandRepository;
     private final PaymentApprovalService paymentApprovalService;
 
-    public MercadoPagoWebhookProcessor (PaymentRepository paymentRepository, PaymentApprovalService paymentApprovalService) {
-        this.paymentRepository = paymentRepository;
+    public MercadoPagoWebhookProcessor (PaymentCommandRepository paymentCommandRepository, PaymentApprovalService paymentApprovalService) {
+        this.paymentCommandRepository = paymentCommandRepository;
         this.paymentApprovalService = paymentApprovalService;
     }
 
@@ -36,7 +33,7 @@ public class MercadoPagoWebhookProcessor {
 
             log.info("Webhoook processando: mpPaymentId={}, status={}", mpPaymentId, mp.getStatus());
 
-            paymentRepository.findByMpPaymentId(mpPaymentId)
+            paymentCommandRepository.findByMpPaymentId(mpPaymentId)
                     .ifPresent(payment -> {
                         if (payment.getPaymentStatus() == PaymentStatus.APPROVED || payment.getPaymentStatus() == PaymentStatus.REFUNDED) {
                             log.info("Pagamento {} já processado.", mpPaymentId);
@@ -48,7 +45,7 @@ public class MercadoPagoWebhookProcessor {
 
                         payment.setPaymentStatus(paymentStatus);
 
-                        paymentRepository.save(payment);
+                        paymentCommandRepository.save(payment);
 
                         if (paymentStatus == PaymentStatus.APPROVED) {
 

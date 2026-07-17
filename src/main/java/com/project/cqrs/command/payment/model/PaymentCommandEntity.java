@@ -1,7 +1,10 @@
 package com.project.cqrs.command.payment.model;
 
 
-import com.project.cqrs.command.order.model.OrderEntity;
+import com.project.cqrs.command.order.model.OrderCommandEntity;
+import com.project.cqrs.shared.enums.PaymentMethod;
+import com.project.cqrs.shared.enums.PaymentStatus;
+import com.project.cqrs.shared.enums.PaymentType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -14,7 +17,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
-public class PaymentEntity {
+public class PaymentCommandEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,7 +25,7 @@ public class PaymentEntity {
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
-    private OrderEntity order;
+    private OrderCommandEntity order;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", nullable = false, length = 30)
@@ -78,15 +81,15 @@ public class PaymentEntity {
     }
 
 
-    public static PaymentEntity forPix(OrderEntity order) {
-        PaymentEntity p = base(order);
+    public static PaymentCommandEntity forPix(OrderCommandEntity order) {
+        PaymentCommandEntity p = base(order);
         p.paymentMethod = PaymentMethod.PIX;
         p.paymentType = PaymentType.ONLINE;
         return p;
     }
 
-    public static PaymentEntity forInPerson(OrderEntity order, String inPersonMethod) {
-        PaymentEntity p = base(order);
+    public static PaymentCommandEntity forInPerson(OrderCommandEntity order, String inPersonMethod) {
+        PaymentCommandEntity p = base(order);
         p.paymentType = PaymentType.IN_PERSON;
         p.paymentMethod = PaymentMethod.valueOf(inPersonMethod.toUpperCase());
         p.inPersonMethod = inPersonMethod;
@@ -94,8 +97,8 @@ public class PaymentEntity {
         return p;
     }
 
-    public static PaymentEntity forCard(OrderEntity order, Integer installments) {
-        PaymentEntity p = base(order);
+    public static PaymentCommandEntity forCard(OrderCommandEntity order, Integer installments) {
+        PaymentCommandEntity p = base(order);
         p.paymentMethod = PaymentMethod.CREDIT_CARD;
         p.paymentType = PaymentType.ONLINE;
         p.installments = installments;
@@ -110,8 +113,8 @@ public class PaymentEntity {
         this.paymentStatus = PaymentStatus.REJECTED;
     }
 
-    private static PaymentEntity base(OrderEntity order) {
-        return PaymentEntity.builder()
+    private static PaymentCommandEntity base(OrderCommandEntity order) {
+        return PaymentCommandEntity.builder()
                 .order(order)
                 .transactionAmount(order.getTotalAmount())
                 .build();

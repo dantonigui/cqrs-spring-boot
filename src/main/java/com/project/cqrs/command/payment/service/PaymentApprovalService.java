@@ -1,8 +1,8 @@
 package com.project.cqrs.command.payment.service;
 
-import com.project.cqrs.command.order.repository.OrderRepository;
+import com.project.cqrs.command.order.repository.OrderCommandRepository;
 import com.project.cqrs.command.payment.kafka.producer.PaymentEventProducer;
-import com.project.cqrs.command.payment.model.PaymentEntity;
+import com.project.cqrs.command.payment.model.PaymentCommandEntity;
 import com.project.cqrs.shared.event.payment.PaymentApprovedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,17 +14,17 @@ public class PaymentApprovalService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentApprovalService.class);
 
-    private final OrderRepository orderRepository;
+    private final OrderCommandRepository orderCommandRepository;
     private final PaymentEventProducer paymentEventProducer;
 
-    public PaymentApprovalService(OrderRepository orderRepository, PaymentEventProducer paymentEventProducer) {
-        this.orderRepository = orderRepository;
+    public PaymentApprovalService(OrderCommandRepository orderCommandRepository, PaymentEventProducer paymentEventProducer) {
+        this.orderCommandRepository = orderCommandRepository;
         this.paymentEventProducer = paymentEventProducer;
     }
 
     @Transactional
-    public void approve(PaymentEntity payment, String mpPaymentId) {
-        orderRepository.findByIdForUpdate(payment.getOrder().getId()).ifPresent(order -> {
+    public void approve(PaymentCommandEntity payment, String mpPaymentId) {
+        orderCommandRepository.findByIdForUpdate(payment.getOrder().getId()).ifPresent(order -> {
 
             if(order.getStatus().name().equals("PAID")) {
                 return;
@@ -32,7 +32,7 @@ public class PaymentApprovalService {
 
             order.markAsPaid();
 
-            orderRepository.save(order);
+            orderCommandRepository.save(order);
 
             PaymentApprovedEvent event = PaymentApprovedEvent.of(
                     mpPaymentId,
