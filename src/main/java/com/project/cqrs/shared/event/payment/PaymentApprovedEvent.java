@@ -1,5 +1,7 @@
 package com.project.cqrs.shared.event.payment;
 
+import com.project.cqrs.shared.enums.PaymentMethod;
+
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -10,7 +12,7 @@ public record PaymentApprovedEvent(
         Long orderId,
         String userId,
         BigDecimal amount,
-        String paymentMethod
+        PaymentMethod paymentMethod
 ) {
     public static PaymentApprovedEvent of(
             String mpPaymentId,
@@ -18,7 +20,7 @@ public record PaymentApprovedEvent(
             Long orderId,
             String userId,
             BigDecimal amount,
-            String paymentMethod
+            PaymentMethod paymentMethod
     ) {
         String deterministicId = UUID.nameUUIDFromBytes(("approved-" + mpPaymentId).getBytes(StandardCharsets.UTF_8)).toString();
 
