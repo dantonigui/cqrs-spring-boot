@@ -5,10 +5,12 @@ import com.project.cqrs.admin.dlq.dto.DlqReplayResponse;
 import com.project.cqrs.admin.dlq.dto.DlqStatsResponse;
 import com.project.cqrs.admin.dlq.service.DlqService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/admin/dlq")
+@PreAuthorize("hasRole('ADMIN')")
 public class DlqAdminController {
 
     private final DlqService dlqService;

@@ -1,6 +1,7 @@
 package com.project.cqrs.config.redis;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -8,7 +9,7 @@ import java.util.Set;
 
 @RestController
 @RequestMapping("/admin/cache")
-// @PreAuthorize("hasRole('ADMIN')")  // ← descomente com Spring Security
+@PreAuthorize("hasRole('ADMIN')")
 public class CacheAdminController {
 
     private final CacheService cacheService;
