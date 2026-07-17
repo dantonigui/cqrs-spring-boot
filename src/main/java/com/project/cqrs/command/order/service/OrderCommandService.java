@@ -2,12 +2,14 @@ package com.project.cqrs.command.order.service;
 
 import com.project.cqrs.command.order.dto.OrderItemDTO;
 import com.project.cqrs.command.order.dto.OrderResponseDTO;
-import com.project.cqrs.command.order.model.OrderEntity;
-import com.project.cqrs.command.order.model.OrderItemEntity;
-import com.project.cqrs.command.order.repository.OrderRepository;
+import com.project.cqrs.command.order.kafka.producer.OrderEventProducer;
+import com.project.cqrs.command.order.model.OrderCommandEntity;
+import com.project.cqrs.command.order.model.OrderItemCommandEntity;
+import com.project.cqrs.command.order.repository.OrderCommandRepository;
 import com.project.cqrs.command.order.dto.CreateOrderRequestDTO;
 import com.project.cqrs.query.product.model.ProductQueryEntity;
 import com.project.cqrs.query.product.repository.ProductQueryRepository;
+import com.project.cqrs.shared.event.order.OrderCreatedEvent;
 import org.apache.velocity.exception.ResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,16 +26,18 @@ public class OrderCommandService {
 
     private static final Logger LOG = LoggerFactory.getLogger(OrderCommandService.class);
 
-    private final OrderRepository orderRepository;
+    private final OrderCommandRepository orderCommandRepository;
     private final ProductQueryRepository  productQueryRepository;
+    private final OrderEventProducer orderEventProducer;
 
-    public OrderCommandService(OrderRepository orderRepository, ProductQueryRepository productQueryRepository) {
-        this.orderRepository = orderRepository;
+    public OrderCommandService(OrderCommandRepository orderCommandRepository, ProductQueryRepository productQueryRepository, OrderEventProducer orderEventProducer) {
+        this.orderCommandRepository = orderCommandRepository;
         this.productQueryRepository = productQueryRepository;
+        this.orderEventProducer = orderEventProducer;
     }
 
     @Transactional
-    public OrderResponseDTO createOrder(Long userId, CreateOrderRequestDTO dto) {
+    public void createOrder(Long userId, CreateOrderRequestDTO dto) {
 
         //1. Extrai todos os productIds do request
         Set<Long> productIds = dto.items().stream()
@@ -53,7 +57,7 @@ public class OrderCommandService {
         }
 
         //4. Monta itens com preço e nome do BANCO - nunca do frontend
-        List<OrderItemEntity> items = dto.items().stream().map(itemDto -> {
+        List<OrderItemCommandEntity> items = dto.items().stream().map(itemDto -> {
             ProductQueryEntity product =  productMap.get(itemDto.productId());
 
             LOG.debug("Item: productId={}, name={}, price={}, qty={}",
@@ -62,28 +66,35 @@ public class OrderCommandService {
                     product.getProductPrice(),
                     itemDto.quantity());
 
-            return OrderItemEntity.of(product.getProductId(), product.getProductName(), product.getProductPrice(), itemDto.quantity());
+            return OrderItemCommandEntity.of(product.getProductId(), product.getProductName(), product.getProductPrice(), itemDto.quantity());
         }).toList();
 
         //5. Cria e persiste o pedido
         //O total é calculado internamente pela entidade com os preços do banco
-        OrderEntity order = OrderEntity.create(userId, items);
-        OrderEntity savedOrder = orderRepository.save(order);
+        OrderCommandEntity order = OrderCommandEntity.create(userId, items);
+        OrderCommandEntity savedOrder = orderCommandRepository.save(order);
 
         LOG.info("Order created with id={}, saved order={}", savedOrder.getId(), savedOrder.getTotalAmount(), items.size(), userId);
 
-        List<OrderResponseDTO.ItemDTO> itemDTOs = savedOrder.getItems().stream()
-                .map(i -> new OrderResponseDTO.ItemDTO(
+        List<OrderCreatedEvent.ItemDTO> itemDTOs = savedOrder.getItems().stream()
+                .map(i -> new OrderCreatedEvent.ItemDTO(
                         i.getProductId(),
                         i.getProductName(),
                         i.getUnitPrice(),
                         i.getQuantity()
         )).toList();
 
-        return new OrderResponseDTO(
+        OrderCreatedEvent event = OrderCreatedEvent.of(
                 savedOrder.getId(),
-                savedOrder.getStatus().name(),
+                userId,
+                savedOrder.getStatus(),
                 savedOrder.getTotalAmount(),
-                itemDTOs);
+                savedOrder.getCreatedAt(),
+                itemDTOs
+        );
+
+        orderEventProducer.publishOrderCreated(savedOrder.getId().toString(), event);
+
+        LOG.info("Pedido criado e evento publicado: orderId={}", savedOrder.getId());
     }
 }

@@ -2,14 +2,16 @@ package com.project.cqrs.command.product.model;
 
 import com.project.cqrs.command.category.model.CategoryCommandEntity;
 import jakarta.persistence.*;
-import lombok.Builder;
-import lombok.Getter;
+import lombok.*;
 
 import java.math.BigDecimal;
 
 @Entity
 @Getter
 @Table(name = "product_command")
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class ProductCommandEntity {
 
     @Id
@@ -31,24 +33,6 @@ public class ProductCommandEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category", nullable = false)
     private CategoryCommandEntity categoryCommandEntity;
-
-    //Constructor
-    protected  ProductCommandEntity() {
-    }
-
-    @Builder
-    private ProductCommandEntity(String productName,
-                          String productCode,
-                          BigDecimal productPrice,
-                          String productImage,
-                          CategoryCommandEntity categoryCommandEntity) {
-
-        this.productName = productName;
-        this.productCode = productCode;
-        this.productPrice = productPrice;
-        this.productImage = productImage;
-        this.categoryCommandEntity = categoryCommandEntity;
-    }
 
     // Factory Method
     public static ProductCommandEntity createProduct(String productName,

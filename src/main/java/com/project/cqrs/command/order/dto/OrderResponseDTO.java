@@ -1,11 +1,13 @@
 package com.project.cqrs.command.order.dto;
 
+import com.project.cqrs.shared.enums.OrderStatus;
+
 import java.math.BigDecimal;
 import java.util.List;
 
 public record OrderResponseDTO(
         Long orderId,
-        String status,
+        OrderStatus status,
         BigDecimal amount,
         List<OrderResponseDTO.ItemDTO> items
 ){

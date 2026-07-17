@@ -1,6 +1,7 @@
 package com.project.cqrs.command.order.controller;
 
 import com.project.cqrs.command.order.dto.OrderResponseDTO;
+import com.project.cqrs.command.order.service.OrderCancelledService;
 import com.project.cqrs.command.order.service.OrderCommandService;
 import com.project.cqrs.command.order.dto.CreateOrderRequestDTO;
 import com.project.cqrs.command.payment.dto.request.CardCheckoutRequestDTO;
@@ -12,11 +13,15 @@ import com.project.cqrs.command.payment.dto.response.PixPaymentResponseDTO;
 import com.project.cqrs.command.payment.service.MercadoPagoPaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @Tag(name = "Order e Checkout",description = "Criação de pedidos e processamento de pagamentos")
 @RestController
@@ -25,10 +30,12 @@ public class OrderCommandController {
 
     private final OrderCommandService orderCommandService;
     private final MercadoPagoPaymentService  paymentService;
+    private final OrderCancelledService  orderCancelledService;
 
-    public OrderCommandController(OrderCommandService orderCommandService, MercadoPagoPaymentService paymentService) {
+    public OrderCommandController(OrderCommandService orderCommandService, MercadoPagoPaymentService paymentService, OrderCancelledService orderCancelledService) {
         this.orderCommandService = orderCommandService;
         this.paymentService = paymentService;
+        this.orderCancelledService = orderCancelledService;
     }
 
     // ---------------- CRIAR PEDIDO -------------------
@@ -46,10 +53,11 @@ public class OrderCommandController {
             """
     )
     @PostMapping
-    public ResponseEntity<OrderResponseDTO> createOrder(@Valid @RequestBody CreateOrderRequestDTO dto,
+    public ResponseEntity<Void> createOrder(@Valid @RequestBody CreateOrderRequestDTO dto,
                                                         @AuthenticationPrincipal String userId) {
-        OrderResponseDTO order = orderCommandService.createOrder(Long.parseLong(userId), dto);
-        return ResponseEntity.ok(order);
+        orderCommandService.createOrder(Long.parseLong(userId), dto);
+        //Tirei OrderResponseDTO e troquei para void aqui e no service por causa da arquitetura de eventos, confirir isso ao fazer testes.
+        return ResponseEntity.ok().build();
     }
 
     // ---------------- CHECKOUT CARTÃO ------------------
@@ -120,5 +128,34 @@ public class OrderCommandController {
         return ResponseEntity.ok(paymentService.registerInPersonPayment(orderId, dto));
     }
 
+    @Operation(
+            summary = "Cancela um pedido",
+            description = """
+        Cancela um pedido do usuário autenticado.
+ 
+        Regras:
+          - PENDING / AWAITING_PAYMENT → cancelado imediatamente
+          - PAID → solicita estorno total no Mercado Pago antes de cancelar
+          - CANCELLED → retorna 400 (já cancelado)
+ 
+        O estorno pode levar até 10 dias úteis para aparecer na fatura.
+        Se o estorno falhar na API do MP, o cancelamento NÃO é efetivado.
+        """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pedido cancelado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Pedido já cancelado"),
+            @ApiResponse(responseCode = "404", description = "Pedido não encontrado")
+    })
+    @DeleteMapping("/{orderId}")
+    public ResponseEntity<Map<String, String>> cancelOrder(@Parameter(description = "ID do pedido") @PathVariable Long orderId,
+                                                           @RequestParam(defaultValue = "Cancelado pelo usuário") String reason,
+                                                           @AuthenticationPrincipal String userId) {
 
+        orderCancelledService.cancelOrder(orderId, Long.parseLong(userId), reason);
+
+        return ResponseEntity.ok(Map.of("message", "Pedido #"
+                + orderId + " cancelado com sucesso", "orderId",
+                orderId.toString()));
+    }
 }

@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @Setter
 @Getter
 @Table(name = "order_items")
-public class OrderItemEntity {
+public class OrderItemCommandEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -20,7 +20,7 @@ public class OrderItemEntity {
     //Remember lazy
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
-    private OrderEntity order;
+    private OrderCommandEntity order;
 
     @Column(name = "product_id", nullable = false)
     private Long productId;
@@ -34,11 +34,11 @@ public class OrderItemEntity {
     @Column(nullable = false)
     private Integer quantity;
 
-    protected OrderItemEntity() {}
+    protected OrderItemCommandEntity() {}
 
     @Builder
-    public static OrderItemEntity of(Long productId, String productName, BigDecimal unitPrice, Integer quantity) {
-        return OrderItemEntity.builder()
+    public static OrderItemCommandEntity of(Long productId, String productName, BigDecimal unitPrice, Integer quantity) {
+        return OrderItemCommandEntity.builder()
                 .productId(productId)
                 .productName(productName)
                 .unitPrice(unitPrice)

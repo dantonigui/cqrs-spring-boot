@@ -1,5 +1,6 @@
 package com.project.cqrs.command.order.model;
 
+import com.project.cqrs.shared.enums.OrderStatus;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,7 +15,7 @@ import java.util.List;
 @Setter
 @Getter
 @Table(name = "orders")
-public class OrderEntity {
+public class OrderCommandEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,7 +32,7 @@ public class OrderEntity {
     private BigDecimal totalAmount;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderItemEntity> items = new ArrayList<>();
+    private List<OrderItemCommandEntity> items = new ArrayList<>();
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -45,11 +46,11 @@ public class OrderEntity {
         this.updatedAt = LocalDateTime.now();
     }
 
-    protected OrderEntity() {}
+    protected OrderCommandEntity() {}
 
     @Builder
-    public static OrderEntity create(Long userId, List<OrderItemEntity> items) {
-        OrderEntity order = OrderEntity.builder()
+    public static OrderCommandEntity create(Long userId, List<OrderItemCommandEntity> items) {
+        OrderCommandEntity order = OrderCommandEntity.builder()
                 .userId(userId)
                 .items(items)
                 .build();
