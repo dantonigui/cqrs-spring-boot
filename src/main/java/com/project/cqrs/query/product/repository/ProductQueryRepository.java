@@ -11,4 +11,6 @@ public interface ProductQueryRepository extends JpaRepository<ProductQueryEntity
 
     Page<ProductQueryEntity> findByOrderByProductNameAsc(Pageable pageable);
 
+    Page<ProductQueryEntity> findByCategoryId(Long categoryId, Pageable pageable);
+
 }

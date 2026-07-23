@@ -29,22 +29,12 @@ public class ProductQueryService {
             key = "'page-' + #pageable.pageNumber + '-size-' + #pageable.pageSize",
             unless = "#result == null || #result.content().isEmpty()")
     @Transactional(readOnly = true)
-    public PageResponseDTO<ProductQueryDTO> findAll(Pageable pageable) {
+    public Page<ProductQueryDTO> findAll(Pageable pageable) {
 
         log.debug("Cache MISS — buscando produtos no MySQL. Page: {}", pageable.getPageNumber());
 
-        Page<ProductQueryDTO> page = productRepository.findByOrderByProductNameAsc(pageable)
+        return productRepository.findByOrderByProductNameAsc(pageable)
                 .map(ProductQueryDTO::from);
-
-        return new PageResponseDTO<>(
-                page.getContent(),
-                page.getNumber(),
-                page.getSize(),
-                page.getTotalElements(),
-                page.getTotalPages(),
-                page.isFirst(),
-                page.isLast()
-        );
     }
 
     @Cacheable(
@@ -57,5 +47,15 @@ public class ProductQueryService {
         return productRepository.findById(id)
                 .map(ProductQueryDTO::from)
                 .orElseThrow(()-> new ResourceNotFoundException("Product not found" + id));
+    }
+
+    @Cacheable(
+            cacheNames = RedisConfig.CACHE_PRODUCTS,
+            key = "'category-' + #categoryId + '-page-' + #pageable.pageNumber "
+                    + "+ '-size-' + #pageable.pageSize",
+            unless = "#result == null || #result.isEmpty()"
+    )
+    public Page<ProductQueryDTO> findByCategoryId(Long categoryId, Pageable pageable) {
+        return productRepository.findByCategoryId(categoryId,pageable).map(ProductQueryDTO::from);
     }
 }
