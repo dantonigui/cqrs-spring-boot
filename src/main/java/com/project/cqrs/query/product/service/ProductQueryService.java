@@ -27,20 +27,21 @@ public class ProductQueryService {
 
     @Cacheable(cacheNames = RedisConfig.CACHE_PRODUCTS,
             key = "'page-' + #pageable.pageNumber + '-size-' + #pageable.pageSize",
-            unless = "#result == null || #result.content().isEmpty()")
+            unless = "#result == null || #result.isEmpty()")
     @Transactional(readOnly = true)
-    public Page<ProductQueryDTO> findAll(Pageable pageable) {
+    public PageResponseDTO<ProductQueryDTO> findAll(Pageable pageable) {
 
         log.debug("Cache MISS — buscando produtos no MySQL. Page: {}", pageable.getPageNumber());
 
-        return productRepository.findByOrderByProductNameAsc(pageable)
-                .map(ProductQueryDTO::from);
+        Page<ProductQueryDTO> page = productRepository.findByOrderByProductNameAsc(pageable).map(ProductQueryDTO::from);
+
+        return PageResponseDTO.from(page);
     }
 
     @Cacheable(
             cacheNames = RedisConfig.CACHE_PRODUCT_DETAILS,
             key = "#id",
-            unless = "#result == null"
+            unless = "#result == null || #result.isEmpty()"
     )
     @Transactional(readOnly = true)
     public ProductQueryDTO findById(Long id) {
@@ -55,7 +56,10 @@ public class ProductQueryService {
                     + "+ '-size-' + #pageable.pageSize",
             unless = "#result == null || #result.isEmpty()"
     )
-    public Page<ProductQueryDTO> findByCategoryId(Long categoryId, Pageable pageable) {
-        return productRepository.findByCategoryId(categoryId,pageable).map(ProductQueryDTO::from);
+    @Transactional(readOnly = true)
+    public PageResponseDTO<ProductQueryDTO> findByCategoryId(Long categoryId, Pageable pageable) {
+         Page <ProductQueryDTO> page = productRepository.findByCategoryId(categoryId,pageable).map(ProductQueryDTO::from);
+
+         return PageResponseDTO.from(page);
     }
 }
