@@ -25,6 +25,7 @@ public class PaymentQueryEntity {
     @Column(name = "order_id", nullable = false)
     private Long orderId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", nullable = false, length = 30)
     private PaymentMethod paymentMethod;
 
