@@ -2,9 +2,7 @@ package com.project.cqrs.command.order.model;
 
 import com.project.cqrs.shared.enums.OrderStatus;
 import jakarta.persistence.*;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -14,15 +12,18 @@ import java.util.List;
 @Entity
 @Setter
 @Getter
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
 @Table(name = "orders")
 public class OrderCommandEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long orderId;
 
     @Column(name = "user_id", nullable = false)
-    private String userId;
+    private Long userId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -46,9 +47,6 @@ public class OrderCommandEntity {
         this.updatedAt = LocalDateTime.now();
     }
 
-    protected OrderCommandEntity() {}
-
-    @Builder
     public static OrderCommandEntity create(Long userId, List<OrderItemCommandEntity> items) {
         OrderCommandEntity order = OrderCommandEntity.builder()
                 .userId(userId)
