@@ -47,11 +47,11 @@ public class ProductQueryController {
 
                                                                      @ParameterObject
                                                                          @PageableDefault(size = 20) Pageable pageable) {
-        Page<ProductQueryDTO> page = (categoryId != null)
+        PageResponseDTO<ProductQueryDTO> page = (categoryId != null)
                 ? productQueryService.findByCategoryId(categoryId, pageable)
                 : productQueryService.findAll(pageable);
 
-        return ResponseEntity.ok(PageResponseDTO.from(page));
+        return ResponseEntity.ok(page);
     }
 
     @RateLimit(requests = 100, durationSeconds = 30)
