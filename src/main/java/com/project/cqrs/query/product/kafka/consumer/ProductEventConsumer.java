@@ -1,5 +1,6 @@
 package com.project.cqrs.query.product.kafka.consumer;
 
+import com.project.cqrs.admin.idempotency.entity.ProcessedEventEntity;
 import com.project.cqrs.admin.idempotency.service.IdempotencyService;
 import com.project.cqrs.config.redis.RedisConfig;
 import com.project.cqrs.query.product.dto.response.ProductQueryDTO;
@@ -34,57 +35,81 @@ public class ProductEventConsumer {
     @KafkaListener(topics = "products-created", groupId = "product-group")
     public void OnProductCreated(ProductCreateEvent event) {
 
-        if (!idempotencyService.isNew(event.getEventId(),"product.created")) {
+        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), "product-created");
+
+        if (processed == null) {
             return;
         }
 
-        log.info("Received product created event: eventId={}, productId={}", event.getEventId(), event.getProductId());
+        try {
+            ProductQueryEntity entity = ProductQueryEntity.fromCreateEvent(event);
 
-        ProductQueryEntity entity = ProductQueryEntity.fromCreateEvent(event);
+            ProductQueryEntity saved =  repository.save(entity);
 
-        ProductQueryEntity saved =  repository.save(entity);
+            putDetailInCache(ProductQueryDTO.from(saved));
 
-        putDetailInCache(ProductQueryDTO.from(saved));
+            evictProductListCache();
 
-        evictProductListCache();
-
-        log.info("Cache sincronizado após criação do produto id={}", event.getProductId());
+            log.info("Cache sincronizado após criação do produto id={}", event.getProductId());
+        } catch (Exception e) {
+            idempotencyService.markFailed(processed);
+            throw e;
+        }
     }
 
     @KafkaListener(topics = "products-updated", groupId = "product-group")
     public void OnProductUpdated(ProductUpdateEvent event) {
-        if (!idempotencyService.isNew(event.getEventId(),"product.updated")) {
+
+        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), "product-updated");
+
+        if (processed == null) {
             return;
         }
 
-        log.info("Processando product.updated: eventId={}, productId={}",
-                event.getEventId(), event.getProductId());
+        try {
+            ProductQueryEntity entity = repository.findById(event.getProductId())
+                    .orElseThrow(() -> new IllegalStateException("Produto não encontrado: " + event.getProductId()));
 
-        repository.findById(event.getProductId()).ifPresent(entity -> {
             entity.applyUpdatedEvent(event);
-            ProductQueryEntity saved = repository.save(entity);
+
+            ProductQueryEntity saved =  repository.save(entity);
 
             putDetailInCache(ProductQueryDTO.from(saved));
-        });
+
+            evictProductListCache();
+
+        }  catch (Exception e) {
+            idempotencyService.markFailed(processed);
+            throw e;
+        }
+
+
     }
 
     @KafkaListener(topics = "products-deleted", groupId = "product-group")
     public void OnProductDeleted(ProductDeleteEvent event) {
-        if(!idempotencyService.isNew(event.getEventId(),"product.deleted")) {
+
+        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), "product-deleted");
+
+        if (processed == null) {
             return;
         }
 
+        try {
+            log.info("Processando product-deleted: eventId={}, productId={}", event.getEventId(), event.getProductId());
 
-        log.info("Processando product.deleted: eventId={}, productId={}",
-                event.getEventId(), event.getProductId());
+            repository.findById(event.getProductId())
+                    .ifPresent(repository::delete);
 
-        repository.deleteById(event.getProductId());
+            evictDetailFromCache(event.getProductId());
 
-        evictDetailFromCache(event.getProductId());
+            evictProductListCache();
 
-        evictProductListCache();
+        } catch (Exception e) {
+            idempotencyService.markFailed(processed);
 
-        log.info("Cache sincronizado após remoção do produto id={}", event.getProductId());
+            throw e;
+        }
     }
 
     private void putDetailInCache(ProductQueryDTO dto) {
