@@ -7,10 +7,10 @@ import com.project.cqrs.command.order.model.OrderCommandEntity;
 import com.project.cqrs.command.order.model.OrderItemCommandEntity;
 import com.project.cqrs.command.order.repository.OrderCommandRepository;
 import com.project.cqrs.command.order.dto.CreateOrderRequestDTO;
+import com.project.cqrs.config.exception.ResourceNotFoundException;
 import com.project.cqrs.query.product.model.ProductQueryEntity;
 import com.project.cqrs.query.product.repository.ProductQueryRepository;
 import com.project.cqrs.shared.event.order.OrderCreatedEvent;
-import org.apache.velocity.exception.ResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -74,7 +74,7 @@ public class OrderCommandService {
         OrderCommandEntity order = OrderCommandEntity.create(userId, items);
         OrderCommandEntity savedOrder = orderCommandRepository.save(order);
 
-        LOG.info("Order created with id={}, saved order={}", savedOrder.getId(), savedOrder.getTotalAmount(), items.size(), userId);
+        LOG.info("Order created with id={}, saved order={}", savedOrder.getOrderId(), savedOrder.getTotalAmount(), items.size(), userId);
 
         List<OrderCreatedEvent.ItemDTO> itemDTOs = savedOrder.getItems().stream()
                 .map(i -> new OrderCreatedEvent.ItemDTO(
@@ -85,7 +85,7 @@ public class OrderCommandService {
         )).toList();
 
         OrderCreatedEvent event = OrderCreatedEvent.of(
-                savedOrder.getId(),
+                savedOrder.getOrderId(),
                 userId,
                 savedOrder.getStatus(),
                 savedOrder.getTotalAmount(),
@@ -93,8 +93,8 @@ public class OrderCommandService {
                 itemDTOs
         );
 
-        orderEventProducer.publishOrderCreated(savedOrder.getId().toString(), event);
+        orderEventProducer.publishOrderCreated(savedOrder.getOrderId().toString(), event);
 
-        LOG.info("Pedido criado e evento publicado: orderId={}", savedOrder.getId());
+        LOG.info("Pedido criado e evento publicado: orderId={}", savedOrder.getOrderId());
     }
 }
