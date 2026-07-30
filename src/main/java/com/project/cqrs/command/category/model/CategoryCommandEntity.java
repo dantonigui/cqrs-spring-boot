@@ -2,14 +2,16 @@ package com.project.cqrs.command.category.model;
 
 import com.project.cqrs.command.product.model.ProductCommandEntity;
 import jakarta.persistence.*;
-import lombok.Builder;
-import lombok.Getter;
+import lombok.*;
 
 import java.util.List;
 
 @Entity
 @Getter
-@Table(name = "category-command")
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "category_command")
 public class CategoryCommandEntity {
 
     @Id
@@ -22,12 +24,6 @@ public class CategoryCommandEntity {
     @OneToMany(mappedBy = "categoryCommandEntity", cascade = CascadeType.ALL)
     private List<ProductCommandEntity> products;
 
-
-    //Constructors
-    protected CategoryCommandEntity() {}
-
-    // Builder no construtor
-    @Builder
     private CategoryCommandEntity(String categoryName) {
         this.categoryName = categoryName;
     }
