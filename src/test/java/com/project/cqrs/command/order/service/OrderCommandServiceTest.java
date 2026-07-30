@@ -85,7 +85,7 @@ public class OrderCommandServiceTest {
 
                 // Simula o save retornando uma entidade com ID gerado
                 OrderCommandEntity savedOrder = mock(OrderCommandEntity.class);
-                when(savedOrder.getId()).thenReturn(1L);
+                when(savedOrder.getOrderId()).thenReturn(1L);
                 when(savedOrder.getStatus()).thenReturn(OrderStatus.PENDING);
                 when(savedOrder.getTotalAmount()).thenReturn(dbPrice.multiply(BigDecimal.valueOf(2)));
                 when(savedOrder.getItems()).thenReturn(List.of());
@@ -108,7 +108,7 @@ public class OrderCommandServiceTest {
                 when(productQueryRepository.findAllById(anySet())).thenReturn(List.of(product));
 
                 OrderCommandEntity savedOrder = mock(OrderCommandEntity.class);
-                when(savedOrder.getId()).thenReturn(1L);
+                when(savedOrder.getOrderId()).thenReturn(1L);
                 when(savedOrder.getStatus()).thenReturn(OrderStatus.PENDING);
                 when(savedOrder.getTotalAmount()).thenReturn(BigDecimal.valueOf(100));
                 when(savedOrder.getItems()).thenReturn(List.of());
@@ -130,7 +130,7 @@ public class OrderCommandServiceTest {
                     .thenReturn(List.of(p1, p2));
 
                 OrderCommandEntity savedOrder = mock(OrderCommandEntity.class);
-                when(savedOrder.getId()).thenReturn(1L);
+                when(savedOrder.getOrderId()).thenReturn(1L);
                 when(savedOrder.getStatus()).thenReturn(OrderStatus.PENDING);
                 when(savedOrder.getTotalAmount()).thenReturn(BigDecimal.valueOf(30));
                 when(savedOrder.getItems()).thenReturn(List.of());
