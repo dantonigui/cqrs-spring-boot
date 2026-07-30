@@ -38,9 +38,6 @@ public class OrderQueryEntity {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<OrderItemQueryEntity> items = new ArrayList<>();
 
-    @OneToMany(mappedBy = "orderId", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<PaymentQueryEntity> payments = new ArrayList<>();
-
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -66,6 +63,7 @@ public class OrderQueryEntity {
                 .status(status)
                 .totalAmount(totalAmount)
                 .createdAt(createdAt)
+                .items(new ArrayList<>())
                 .build();
     }
 
