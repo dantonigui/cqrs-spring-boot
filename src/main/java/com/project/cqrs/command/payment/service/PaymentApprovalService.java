@@ -24,7 +24,7 @@ public class PaymentApprovalService {
 
     @Transactional
     public void approve(PaymentCommandEntity payment, String mpPaymentId) {
-        orderCommandRepository.findByIdForUpdate(payment.getOrder().getId()).ifPresent(order -> {
+        orderCommandRepository.findByIdForUpdate(payment.getOrder().getOrderId()).ifPresent(order -> {
 
             if(order.getStatus().name().equals("PAID")) {
                 return;
@@ -37,15 +37,15 @@ public class PaymentApprovalService {
             PaymentApprovedEvent event = PaymentApprovedEvent.of(
                     mpPaymentId,
                     payment.getId(),
-                    order.getId(),
+                    order.getOrderId(),
                     order.getUserId(),
                     payment.getTransactionAmount(),
-                    payment.getPaymentMethod().name()
+                    payment.getPaymentMethod()
             );
 
-            paymentEventProducer.publishPaymentApproved(order.getId().toString(), event);
+            paymentEventProducer.publishPaymentApproved(order.getOrderId().toString(), event);
 
-            log.info("Payment approved for payment with id " + order.getId());
+            log.info("Payment approved for payment with id " + order.getOrderId());
         });
     }
 }
