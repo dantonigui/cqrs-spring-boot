@@ -115,10 +115,12 @@ public class SecurityConfig {
                         ).authenticated()
 
                         // Query — qualquer autenticado (USER e ADMIN)
-                        .requestMatchers("/api/v1/query/**").authenticated()
+//                        .requestMatchers("/api/v1/query/**").authenticated()
 
+                                .requestMatchers("/api/v1/query/**").permitAll()
                         // Command — apenas ADMIN
-                        .requestMatchers("/api/v1/command/**").hasRole("ADMIN")
+//                        .requestMatchers("/api/v1/command/**").hasRole("ADMIN")
+                                .requestMatchers("/api/v1/command/**").permitAll()
 
                         .anyRequest().authenticated()
                 )
