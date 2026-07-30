@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 @Entity
 @Getter
 @Setter
-@Table(name = "product-query")
+@Table(name = "product_query")
 public class ProductQueryEntity {
     @Id
     private Long productId;
@@ -22,7 +22,7 @@ public class ProductQueryEntity {
     private String productImage;
     private Long  categoryId;
 
-    protected ProductQueryEntity() {
+    public ProductQueryEntity() {
     }
 
     public ProductQueryEntity(Long productId, String productName, String productCode, BigDecimal productPrice, String productImage, Long categoryId) {
