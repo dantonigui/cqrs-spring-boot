@@ -18,7 +18,7 @@ public record OrderQueryResponseDTO(
         List<OrderItemQueryDTO> items,
         List<PaymentQueryDTO> payments
 ) {
-    public static OrderQueryResponseDTO from(OrderQueryEntity orderQueryEntity) {
+    public static OrderQueryResponseDTO from(OrderQueryEntity orderQueryEntity, List<PaymentQueryDTO> payments) {
         return new OrderQueryResponseDTO(
                 orderQueryEntity.getOrderId(),
                 orderQueryEntity.getUserId(),
@@ -27,8 +27,7 @@ public record OrderQueryResponseDTO(
                 orderQueryEntity.getCreatedAt(),
                 orderQueryEntity.getUpdatedAt(),
                 orderQueryEntity.getItems().stream().map(OrderItemQueryDTO::fromEntity).toList(),
-                orderQueryEntity.getPayments().stream()
-                        .map(PaymentQueryDTO::from).toList()
+                payments
         );
     }
 
