@@ -10,7 +10,7 @@ public record PaymentApprovedEvent(
         String eventId,
         Long paymentId,
         Long orderId,
-        String userId,
+        Long userId,
         BigDecimal amount,
         PaymentMethod paymentMethod
 ) {
@@ -18,7 +18,7 @@ public record PaymentApprovedEvent(
             String mpPaymentId,
             Long paymentId,
             Long orderId,
-            String userId,
+            Long userId,
             BigDecimal amount,
             PaymentMethod paymentMethod
     ) {
