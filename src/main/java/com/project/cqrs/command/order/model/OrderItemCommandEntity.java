@@ -1,15 +1,16 @@
 package com.project.cqrs.command.order.model;
 
 import jakarta.persistence.*;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.math.BigDecimal;
 
 @Entity
 @Setter
 @Getter
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
 @Table(name = "order_items")
 public class OrderItemCommandEntity {
 
@@ -34,9 +35,7 @@ public class OrderItemCommandEntity {
     @Column(nullable = false)
     private Integer quantity;
 
-    protected OrderItemCommandEntity() {}
 
-    @Builder
     public static OrderItemCommandEntity of(Long productId, String productName, BigDecimal unitPrice, Integer quantity) {
         return OrderItemCommandEntity.builder()
                 .productId(productId)
