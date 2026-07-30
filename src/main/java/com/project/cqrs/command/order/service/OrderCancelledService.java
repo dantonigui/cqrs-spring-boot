@@ -55,9 +55,14 @@ public class OrderCancelledService {
         OrderCommandEntity order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado" + orderId));
 
-        // Pedido já cancelado
-        if(!order.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("Pedido #" + orderId + "já estáa cancelado.");
+        // Se user for diferente do user do pedido dá erro.
+        if (!userId.equals(order.getUserId())) {
+            throw new ResourceNotFoundException("UserId diferente do OrderId");
+        }
+
+        // Se pedido já estiver marcado como Cancelado dá erro.
+        if (order.getStatus().equals(OrderStatus.CANCELLED)) {
+            throw new IllegalStateException("Já está cancelado!");
         }
 
         String mpPaymentId = null;
@@ -69,7 +74,7 @@ public class OrderCancelledService {
 
         //Cancela o pagamento pendente no banco (se houver)
         paymentRepository.findAll().stream()
-                .filter(p -> p.getOrder().getId().equals(orderId))
+                .filter(p -> p.getOrder().getOrderId().equals(orderId))
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.PENDING || p.getPaymentStatus() == PaymentStatus.IN_PROCESS)
                 .forEach(p -> {
                     p.setPaymentStatus(PaymentStatus.CANCELLED);
@@ -80,7 +85,7 @@ public class OrderCancelledService {
         order.markAsCancelled();
         orderRepository.save(order);
 
-        log.info("Pedido cancelado: orderId={}, userId={}, reason={}", orderId, userId, reason);
+        log.info("Pedido cancelado: orderId= {}, userId= {}, reason= {}", orderId, userId, reason);
 
         OrderCancelledEvent event = OrderCancelledEvent.of(
                 orderId,
@@ -101,7 +106,7 @@ public class OrderCancelledService {
 
     private String refundPayment(Long orderId) {
         return paymentRepository.findAll().stream()
-                .filter(p -> p.getOrder().getId().equals(orderId))
+                .filter(p -> p.getOrder().getOrderId().equals(orderId))
                 .filter(p -> p.getPaymentStatus() == PaymentStatus.APPROVED)
                 .filter(p -> p.getMpPaymentId() != null)
                 .findFirst()
@@ -113,7 +118,7 @@ public class OrderCancelledService {
                         payment.setPaymentStatus(PaymentStatus.REFUNDED);
                         paymentRepository.save(payment);
 
-                        log.info("Estorno solicitando no MP: mpPaymentId ={}, orderId={}", payment.getMpPaymentId(), orderId);
+                        log.info("Estorno solicitado no MP: mpPaymentId= {}, orderId= {}", payment.getMpPaymentId(), orderId);
 
                         return payment.getMpPaymentId();
                     } catch (MPApiException e) {
