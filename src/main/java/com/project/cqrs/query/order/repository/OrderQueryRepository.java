@@ -19,7 +19,6 @@ public interface OrderQueryRepository extends JpaRepository<OrderQueryEntity, Lo
     @Query("""
         SELECT o FROM OrderQueryEntity o
         LEFT JOIN FETCH o.items
-        LEFT JOIN FETCH o.payments
         WHERE o.orderId = :orderId
     """)
     Optional<OrderQueryEntity> findByOrderId(@Param("orderId") Long orderId);
