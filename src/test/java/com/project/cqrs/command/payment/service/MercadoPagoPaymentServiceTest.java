@@ -13,7 +13,6 @@ import com.project.cqrs.command.payment.dto.response.PixPaymentResponseDTO;
 import com.project.cqrs.config.exception.PaymentException;
 import com.project.cqrs.shared.enums.OrderStatus;
 import com.project.cqrs.command.order.repository.OrderCommandRepository;
-import com.project.cqrs.command.payment.dto.*;
 import com.project.cqrs.command.payment.dto.request.PixCheckoutRequestDTO;
 import com.project.cqrs.command.payment.model.PaymentCommandEntity;
 import com.project.cqrs.shared.enums.PaymentStatus;
@@ -118,7 +117,7 @@ class MercadoPagoPaymentServiceTest {
     private void stubCardResponse(Payment mpPaymentMock,
                                   PaymentStatus status) {
         when(mpPaymentMock.getId()).thenReturn(888L);
-        when(mpPaymentMock.getStatus()).thenReturn(status);
+        when(mpPaymentMock.getStatus()).thenReturn(status.name());
         when(mpPaymentMock.getStatusDetail()).thenReturn("accredited");
         var card = mock(com.mercadopago.resources.payment.PaymentCard.class);
         when(card.getLastFourDigits()).thenReturn("1234");
