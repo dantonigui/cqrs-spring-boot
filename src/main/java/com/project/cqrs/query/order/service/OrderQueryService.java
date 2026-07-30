@@ -4,6 +4,8 @@ import com.project.cqrs.config.exception.ResourceNotFoundException;
 import com.project.cqrs.query.order.dto.OrderQueryResponseDTO;
 import com.project.cqrs.query.order.model.OrderQueryEntity;
 import com.project.cqrs.query.order.repository.OrderQueryRepository;
+import com.project.cqrs.query.payment.dto.PaymentQueryDTO;
+import com.project.cqrs.query.payment.repository.PaymentQueryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
@@ -24,9 +26,11 @@ public class OrderQueryService {
     public static final String CACHE_ORDER_DETAIL = "order_detail";
 
     private final OrderQueryRepository orderQueryRepository;
+    private final PaymentQueryRepository paymentQueryRepository;
 
-    public OrderQueryService(OrderQueryRepository orderQueryRepository) {
+    public OrderQueryService(OrderQueryRepository orderQueryRepository, PaymentQueryRepository paymentQueryRepository) {
         this.orderQueryRepository = orderQueryRepository;
+        this.paymentQueryRepository = paymentQueryRepository;
     }
 
     /**
@@ -76,7 +80,9 @@ public class OrderQueryService {
             throw new ResourceNotFoundException("User Not Found" + orderId);
             // Retorna 404 em vez de 403 para não revelar que o pedido existe
         }
-        return OrderQueryResponseDTO.from(entity);
+
+        var payments = paymentQueryRepository.findByOrderId(orderId).stream().map(PaymentQueryDTO::from).toList();
+        return OrderQueryResponseDTO.from(entity, payments);
     }
 
     /**
