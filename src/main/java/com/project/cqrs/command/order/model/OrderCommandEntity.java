@@ -29,7 +29,7 @@ public class OrderCommandEntity {
     @Column(nullable = false, length = 30)
     private OrderStatus status = OrderStatus.PENDING;
 
-    @Column(name = "totalAmount", nullable = false, precision = 10, scale = 2)
+    @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
