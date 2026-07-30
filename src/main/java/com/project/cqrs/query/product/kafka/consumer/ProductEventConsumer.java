@@ -3,6 +3,7 @@ package com.project.cqrs.query.product.kafka.consumer;
 import com.project.cqrs.admin.idempotency.entity.ProcessedEventEntity;
 import com.project.cqrs.admin.idempotency.service.IdempotencyService;
 import com.project.cqrs.config.redis.RedisConfig;
+import com.project.cqrs.shared.kafka.topics.ProductTopics;
 import com.project.cqrs.query.product.dto.response.ProductQueryDTO;
 import com.project.cqrs.shared.event.product.ProductCreateEvent;
 import com.project.cqrs.shared.event.product.ProductDeleteEvent;
@@ -14,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,10 +35,10 @@ public class ProductEventConsumer {
         this.idempotencyService = idempotencyService;
     }
 
-    @KafkaListener(topics = "products-created", groupId = "product-group")
-    public void OnProductCreated(ProductCreateEvent event) {
+    @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED, groupId = "product-group")
+    public void OnProductCreated(ProductCreateEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
-        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), "product-created");
+        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_CREATED, deliveryAttempt);
 
         if (processed == null) {
             return;
@@ -57,10 +60,10 @@ public class ProductEventConsumer {
         }
     }
 
-    @KafkaListener(topics = "products-updated", groupId = "product-group")
-    public void OnProductUpdated(ProductUpdateEvent event) {
+    @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED, groupId = "product-group")
+    public void OnProductUpdated(ProductUpdateEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
-        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), "product-updated");
+        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_CREATED, deliveryAttempt);
 
         if (processed == null) {
             return;
@@ -86,10 +89,10 @@ public class ProductEventConsumer {
 
     }
 
-    @KafkaListener(topics = "products-deleted", groupId = "product-group")
-    public void OnProductDeleted(ProductDeleteEvent event) {
+    @KafkaListener(topics = ProductTopics.PRODUCTS_DELETED, groupId = "product-group")
+    public void OnProductDeleted(ProductDeleteEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
-        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), "product-deleted");
+        ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_DELETED,deliveryAttempt);
 
         if (processed == null) {
             return;
