@@ -48,7 +48,7 @@ public class PaymentApprovalServiceTest {
 
     private OrderCommandEntity mockOrder(OrderStatus orderStatus) {
         OrderCommandEntity orderEntity = mock(OrderCommandEntity.class);
-        when(orderEntity.getId()).thenReturn(ORDER_ID);
+        when(orderEntity.getOrderId()).thenReturn(ORDER_ID);
         when(orderEntity.getUserId()).thenReturn(USER_ID);
         when(orderEntity.getStatus()).thenReturn(orderStatus);
 
@@ -144,7 +144,7 @@ public class PaymentApprovalServiceTest {
             when(paymentEntity.getOrder())
                     .thenReturn(orderEntity);
 
-            when(orderEntity.getId())
+            when(orderEntity.getOrderId())
                     .thenReturn(ORDER_ID);
 
             when(orderEntity.getStatus())
@@ -171,7 +171,7 @@ public class PaymentApprovalServiceTest {
             when(paymentEntity.getOrder())
                     .thenReturn(orderEntity);
 
-            when(orderEntity.getId())
+            when(orderEntity.getOrderId())
                     .thenReturn(ORDER_ID);
 
             when(orderCommandRepository.findByIdForUpdate(ORDER_ID))
