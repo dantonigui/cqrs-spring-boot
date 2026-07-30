@@ -96,9 +96,9 @@ public class MercadoPagoPaymentService {
             PaymentCreateRequest request = PaymentCreateRequest.builder()
                     .transactionAmount(order.getTotalAmount())
                     .paymentMethodId("pix")
-                    .description("Pedido #" + order.getId())
+                    .description("Pedido #" + order.getOrderId())
                     .notificationUrl(baseUrl + "")
-                    .externalReference(order.getId().toString())
+                    .externalReference(order.getOrderId().toString())
                     .payer(PaymentPayerRequest.builder()
                             .email(pixCheckoutRequestDTO.payerEmail())
                             .firstName(pixCheckoutRequestDTO.payerFirstName())
@@ -112,7 +112,7 @@ public class MercadoPagoPaymentService {
 
             Map<String, String> customHeaders = Map.of(
                     "X-Idempotency-Key",
-                    "pix-order-" + order.getId()
+                    "pix-order-" + order.getOrderId()
             );
 
             MPRequestOptions options = MPRequestOptions.builder()
@@ -133,11 +133,11 @@ public class MercadoPagoPaymentService {
             paymentCommandRepository.save(payment);
             orderCommandRepository.save(order);
 
-            LOG.info("PIX criado: orderId={}, mpPaymentId={}", order.getId(), payment.getId());
+            LOG.info("PIX criado: orderId={}, mpPaymentId={}", order.getOrderId(), payment.getId());
 
             return new PixPaymentResponseDTO(
                     payment.getId(),
-                    order.getId(),
+                    order.getOrderId(),
                     mp.getStatus(),
                     txData.getQrCode(),
                     txData.getQrCodeBase64(),
