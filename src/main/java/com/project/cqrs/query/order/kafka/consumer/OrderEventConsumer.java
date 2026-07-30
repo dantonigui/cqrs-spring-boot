@@ -15,6 +15,8 @@ import com.project.cqrs.shared.event.payment.PaymentApprovedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,10 +43,10 @@ public class OrderEventConsumer {
     // ── order.created ─────────────────────────────────────────────────────────
 
     @Transactional
-    @KafkaListener(topics = "order.created", groupId = "cqrs-resilient-consumer-group", containerFactory = "resilientKafkaListenerContainerFactory")
-    public void onOrderCreated(OrderCreatedEvent orderCreatedEvent) {
+    @KafkaListener(topics = "order-created", groupId = "cqrs-resilient-consumer-group", containerFactory = "resilientKafkaListenerContainerFactory")
+    public void onOrderCreated(OrderCreatedEvent orderCreatedEvent, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
-        if (!idempotencyService.isNew(orderCreatedEvent.eventId(), "order.created")) {
+        if (idempotencyService.tryClaim(orderCreatedEvent.eventId(), "order-created", deliveryAttempt)) {
             return;
         }
 
