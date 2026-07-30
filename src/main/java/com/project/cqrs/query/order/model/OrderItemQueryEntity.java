@@ -2,14 +2,16 @@ package com.project.cqrs.query.order.model;
 
 
 import jakarta.persistence.*;
-import lombok.Builder;
-import lombok.Getter;
+import lombok.*;
 
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "order_item_query")
 @Getter
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor()
 public class OrderItemQueryEntity {
 
     @Id
@@ -34,9 +36,7 @@ public class OrderItemQueryEntity {
 
     // ── Factory methods ───────────────────────────────────────────────────────
 
-    protected OrderItemQueryEntity() {}
 
-    @Builder
     public static OrderItemQueryEntity of(OrderQueryEntity order, Long productId, String productName, BigDecimal unitPrice, Integer quantity) {
         return OrderItemQueryEntity.builder()
                 .order(order)
