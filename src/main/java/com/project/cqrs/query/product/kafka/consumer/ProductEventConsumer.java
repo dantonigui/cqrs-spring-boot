@@ -3,6 +3,8 @@ package com.project.cqrs.query.product.kafka.consumer;
 import com.project.cqrs.admin.idempotency.entity.ProcessedEventEntity;
 import com.project.cqrs.admin.idempotency.service.IdempotencyService;
 import com.project.cqrs.config.redis.RedisConfig;
+import com.project.cqrs.shared.kafka.factory.KafkaContainerFactories;
+import com.project.cqrs.shared.kafka.groupId.KafkaConsumerGroups;
 import com.project.cqrs.shared.kafka.topics.ProductTopics;
 import com.project.cqrs.query.product.dto.response.ProductQueryDTO;
 import com.project.cqrs.shared.event.product.ProductCreateEvent;
@@ -35,7 +37,7 @@ public class ProductEventConsumer {
         this.idempotencyService = idempotencyService;
     }
 
-    @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED, groupId = "product-group")
+    @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED, groupId= KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
     public void OnProductCreated(ProductCreateEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
         ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_CREATED, deliveryAttempt);
@@ -60,7 +62,7 @@ public class ProductEventConsumer {
         }
     }
 
-    @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED, groupId = "product-group")
+    @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED,  groupId= KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
     public void OnProductUpdated(ProductUpdateEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
         ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_CREATED, deliveryAttempt);
@@ -89,7 +91,7 @@ public class ProductEventConsumer {
 
     }
 
-    @KafkaListener(topics = ProductTopics.PRODUCTS_DELETED, groupId = "product-group")
+    @KafkaListener(topics = ProductTopics.PRODUCTS_DELETED,  groupId= KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
     public void OnProductDeleted(ProductDeleteEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
         ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_DELETED,deliveryAttempt);
