@@ -1,17 +1,18 @@
 package com.project.cqrs.query.order.kafka.consumer;
 
+import com.project.cqrs.admin.idempotency.entity.ProcessedEventEntity;
 import com.project.cqrs.admin.idempotency.service.IdempotencyService;
 import com.project.cqrs.query.order.model.OrderItemQueryEntity;
 import com.project.cqrs.query.order.model.OrderQueryEntity;
 import com.project.cqrs.query.order.repository.OrderQueryRepository;
 import com.project.cqrs.query.order.service.OrderQueryService;
-import com.project.cqrs.query.payment.model.PaymentQueryEntity;
-import com.project.cqrs.query.payment.repository.PaymentQueryRepository;
 import com.project.cqrs.shared.enums.OrderStatus;
 import com.project.cqrs.shared.event.order.OrderCancelledEvent;
 import com.project.cqrs.shared.event.order.OrderCreatedEvent;
 import com.project.cqrs.shared.event.order.OrderStatusChangedEvent;
-import com.project.cqrs.shared.event.payment.PaymentApprovedEvent;
+import com.project.cqrs.shared.kafka.factory.KafkaContainerFactories;
+import com.project.cqrs.shared.kafka.groupId.KafkaConsumerGroups;
+import com.project.cqrs.shared.kafka.topics.OrderTopics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -26,16 +27,13 @@ public class OrderEventConsumer {
     private static final Logger log = LoggerFactory.getLogger(OrderEventConsumer.class);
 
     private final OrderQueryRepository orderQueryRepository;
-    private final PaymentQueryRepository paymentQueryRepository;
     private final OrderQueryService orderQueryService;
     private final IdempotencyService idempotencyService;
 
     public OrderEventConsumer(OrderQueryRepository orderQueryRepository,
-                              PaymentQueryRepository paymentQueryRepository,
                               OrderQueryService orderQueryService,
                               IdempotencyService idempotencyService) {
         this.orderQueryRepository = orderQueryRepository;
-        this.paymentQueryRepository = paymentQueryRepository;
         this.orderQueryService = orderQueryService;
         this.idempotencyService = idempotencyService;
     }
@@ -43,133 +41,139 @@ public class OrderEventConsumer {
     // ── order.created ─────────────────────────────────────────────────────────
 
     @Transactional
-    @KafkaListener(topics = "order-created", groupId = "cqrs-resilient-consumer-group", containerFactory = "resilientKafkaListenerContainerFactory")
-    public void onOrderCreated(OrderCreatedEvent orderCreatedEvent, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
+    @KafkaListener(topics = OrderTopics.ORDER_CREATED, groupId = KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
+    public void onOrderCreated(OrderCreatedEvent orderCreatedEvent, @Header(value = KafkaHeaders.DELIVERY_ATTEMPT, required = false) Integer deliveryAttempt) {
 
-        if (idempotencyService.tryClaim(orderCreatedEvent.eventId(), "order-created", deliveryAttempt)) {
+       ProcessedEventEntity processed = idempotencyService.tryClaim(orderCreatedEvent.eventId(), OrderTopics.ORDER_CREATED, deliveryAttempt);
+
+        if (processed == null) {
             return;
         }
 
-        log.info("Processando order.created: orderId={}", orderCreatedEvent.orderId());
-        // Guarda extra: não cria duplicata se o orderId já existir
-        if (orderQueryRepository.existsByOrderId(orderCreatedEvent.orderId())) {
-            log.warn("order.created ignorado: orderId={}", orderCreatedEvent.orderId());
-            return;
-        }
+        try {
+            log.info("Processando order.created: orderId={}", orderCreatedEvent.orderId());
+            // Guarda extra: não cria duplicata se o orderId já existir
+            if (orderQueryRepository.existsByOrderId(orderCreatedEvent.orderId())) {
+                log.warn("order.created ignorado: orderId={}", orderCreatedEvent.orderId());
 
-        OrderQueryEntity order = OrderQueryEntity.fromCreatedEvent(
-                orderCreatedEvent.orderId(),
-                orderCreatedEvent.userId(),
-                orderCreatedEvent.status(),
-                orderCreatedEvent.totalAmount(),
-                orderCreatedEvent.createdAt()
-        );
+                idempotencyService.markCompleted(processed);
 
-        // Monta os itens a partir do evento — preço vem do evento (já validado
-        // no Command Side), não consulta o banco de produtos aqui
-        orderCreatedEvent.items().forEach(item -> {
-            OrderItemQueryEntity orderItem = OrderItemQueryEntity.of(
-                    order,
-                    item.productId(),
-                    item.productName(),
-                    item.unitPrice(),
-                    item.quantity()
+                return;
+            }
+
+            OrderQueryEntity order = OrderQueryEntity.fromCreatedEvent(
+                    orderCreatedEvent.orderId(),
+                    orderCreatedEvent.userId(),
+                    orderCreatedEvent.status(),
+                    orderCreatedEvent.totalAmount(),
+                    orderCreatedEvent.createdAt()
             );
-            order.getItems().add(orderItem);
-        });
 
-        orderQueryRepository.save(order);
+            // Monta os itens a partir do evento — preço vem do evento (já validado
+            // no Command Side), não consulta o banco de produtos aqui
+            orderCreatedEvent.items().forEach(item -> {
+                OrderItemQueryEntity orderItem = OrderItemQueryEntity.of(
+                        order,
+                        item.productId(),
+                        item.productName(),
+                        item.unitPrice(),
+                        item.quantity()
+                );
+                order.getItems().add(orderItem);
+            });
 
-        orderQueryService.evictUserOrdersCache();
+            orderQueryRepository.save(order);
 
-        log.info("Order created: orderId={}", orderCreatedEvent.orderId());
+            orderQueryService.evictUserOrdersCache();
 
+            idempotencyService.markCompleted(processed);
+
+            log.info(
+                    "Order created successfully: eventId={}, orderId={}",
+                    orderCreatedEvent.eventId(),
+                    orderCreatedEvent.orderId()
+            );
+        } catch (Exception e) {
+            idempotencyService.markFailed(processed);
+
+            throw e;
+        }
     }
 
     // ── order.status.changed ──────────────────────────────────────────────────
 
     @Transactional
-    @KafkaListener(topics = "order.status.changed", groupId = "cqrs-resilient-consumer-group", containerFactory = "resilientKafkaListenerContainerFactory")
-    public void onOrderStatusChanged(OrderStatusChangedEvent orderStatusChangedEvent) {
+    @KafkaListener(topics = OrderTopics.ORDER_UPDATED, groupId = KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
+    public void onOrderStatusChanged(OrderStatusChangedEvent orderStatusChangedEvent,  @Header(value = KafkaHeaders.DELIVERY_ATTEMPT, required = false) Integer deliveryAttempt) {
 
-        if (!idempotencyService.isNew(orderStatusChangedEvent.eventId(), "order.status.changed")) {
+        ProcessedEventEntity processed = idempotencyService.tryClaim(orderStatusChangedEvent.eventId(), OrderTopics.ORDER_UPDATED, deliveryAttempt);
+
+        if (processed == null) {
             return;
         }
 
-        log.info("Processando order.status.changed: orderId={}", orderStatusChangedEvent.orderId(),
-                orderStatusChangedEvent.oldStatus(),  orderStatusChangedEvent.newStatus());
+        try {
+            log.info("Processando order.status.changed: orderId={}", orderStatusChangedEvent.orderId(),
+                    orderStatusChangedEvent.oldStatus(),  orderStatusChangedEvent.newStatus());
 
-        orderQueryRepository.findByOrderId(orderStatusChangedEvent.orderId()).ifPresent(order -> {
-            order.updateStatus(orderStatusChangedEvent.newStatus());
-            orderQueryRepository.save(order);
+            OrderQueryEntity order = orderQueryRepository.findByOrderId(orderStatusChangedEvent.orderId())
+                    .orElseThrow(() -> new IllegalStateException("Order not Found: " + orderStatusChangedEvent.orderId()));
 
-            // Invalida caches
-            orderQueryService.evictOrderCache(orderStatusChangedEvent.orderId());
-            orderQueryService.evictUserOrdersCache();
-        });
+                order.updateStatus(orderStatusChangedEvent.newStatus());
+
+                orderQueryRepository.save(order);
+
+                // Invalida caches
+                orderQueryService.evictOrderCache(orderStatusChangedEvent.orderId());
+                orderQueryService.evictUserOrdersCache();
+
+            idempotencyService.markCompleted(processed);
+
+            log.info("Order updated: orderId={}", orderStatusChangedEvent.orderId());
+        } catch (Exception e) {
+
+            idempotencyService.markFailed(processed);
+            throw e;
+        }
     }
 
     // ── order.cancelled ───────────────────────────────────────────────────────
 
     @Transactional
-    @KafkaListener(topics = "order.cancelled", groupId = "cqrs-resilient-consumer-group")
-    public void onOrderCancelled(OrderCancelledEvent orderCancelledEvent) {
+    @KafkaListener(topics = OrderTopics.ORDER_DELETED, groupId = KafkaConsumerGroups.QUERY,containerFactory = KafkaContainerFactories.RESILIENT)
+    public void onOrderCancelled(OrderCancelledEvent orderCancelledEvent, @Header(value = KafkaHeaders.DELIVERY_ATTEMPT, required = false) Integer deliveryAttempt) {
 
-        if (!idempotencyService.isNew(orderCancelledEvent.eventId(), "order.cancelled")) {
+        ProcessedEventEntity processed = idempotencyService.tryClaim(orderCancelledEvent.eventId(), OrderTopics.ORDER_DELETED,  deliveryAttempt);
+
+        if (processed == null) {
             return;
         }
 
-        log.info("Processando order.cancelled: orderId={}", orderCancelledEvent.orderId());
+        try {
+            log.info("Processando order.cancelled: orderId={}", orderCancelledEvent.orderId());
 
-        orderQueryRepository.findByOrderId(orderCancelledEvent.orderId()).ifPresent(order -> {
+            OrderQueryEntity order = orderQueryRepository.findByOrderId(orderCancelledEvent.orderId())
+                    .orElseThrow(() -> new IllegalStateException("Order not found: " + orderCancelledEvent.orderId()));
+
             order.updateStatus(OrderStatus.CANCELLED);
+
             orderQueryRepository.save(order);
 
             orderQueryService.evictOrderCache(orderCancelledEvent.orderId());
             orderQueryService.evictUserOrdersCache();
-        });
-    }
 
-    // ── payment.approved ──────────────────────────────────────────────────────
+            idempotencyService.markCompleted(processed);
 
-    /**
-     * Consome o PaymentApprovedEvent (já publicado pelo PaymentApprovalService)
-     * para criar a projeção de leitura do pagamento e atualizar o status
-     * do pedido na projeção.
-     */
-    @Transactional
-    @KafkaListener(topics = "payment.approved", groupId = "cqrs-resilient-consumer-group", containerFactory = "resilientKafkaListenerContainerFactory")
-    public void onPaymentApproved(PaymentApprovedEvent paymentApprovedEvent) {
+            log.info(
+                    "Order cancelled: orderId={}",
+                    orderCancelledEvent.orderId()
+            );
 
-        if(!idempotencyService.isNew(paymentApprovedEvent.eventId(), "payment.approved")) {
-            return;
+        } catch (Exception e) {
+
+            idempotencyService.markFailed(processed);
+
+            throw e;
         }
-
-        log.info("Processando payment.approved: orderId={}, paymentId={}", paymentApprovedEvent.orderId(),  paymentApprovedEvent.paymentId());
-
-        boolean alreadyExists = paymentQueryRepository.existsByOrderIdAndMpPaymentId(paymentApprovedEvent.orderId(), paymentApprovedEvent.eventId());
-        if (!alreadyExists) {
-            PaymentQueryEntity paymentQuery = PaymentQueryEntity.fromApprovedEvent(
-                    paymentApprovedEvent.orderId(),
-                    paymentApprovedEvent.paymentId().toString(),
-                    paymentApprovedEvent.amount(),
-                    paymentApprovedEvent.paymentMethod()
-                    );
-            paymentQueryRepository.save(paymentQuery);
-        }
-
-        // 2. Atualiza status do pedido para PAID na projeção
-        orderQueryRepository.findByOrderId(paymentApprovedEvent.orderId()).ifPresent(order -> {
-            if (!OrderStatus.PAID.equals(order.getStatus())) {
-                order.updateStatus(OrderStatus.PAID);
-                orderQueryRepository.save(order);
-            }
-        });
-
-        // 3. Invalida caches
-        orderQueryService.evictOrderCache(paymentApprovedEvent.orderId());
-        orderQueryService.evictUserOrdersCache();
-
-        log.info("Order approved: orderId={}", paymentApprovedEvent.orderId());
     }
 }
