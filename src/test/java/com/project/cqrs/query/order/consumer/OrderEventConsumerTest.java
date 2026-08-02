@@ -1,15 +1,16 @@
 package com.project.cqrs.query.order.consumer;
 
+import com.project.cqrs.admin.idempotency.entity.ProcessedEventEntity;
 import com.project.cqrs.admin.idempotency.service.IdempotencyService;
 import com.project.cqrs.query.order.kafka.consumer.OrderEventConsumer;
 import com.project.cqrs.query.order.model.OrderQueryEntity;
 import com.project.cqrs.query.order.repository.OrderQueryRepository;
 import com.project.cqrs.query.order.service.OrderQueryService;
-import com.project.cqrs.query.payment.repository.PaymentQueryRepository;
 import com.project.cqrs.shared.enums.OrderStatus;
 import com.project.cqrs.shared.event.order.OrderCancelledEvent;
 import com.project.cqrs.shared.event.order.OrderCreatedEvent;
 import com.project.cqrs.shared.event.order.OrderStatusChangedEvent;
+import com.project.cqrs.shared.kafka.topics.OrderTopics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,187 +24,606 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("OrderEventConsumer")
-public class OrderEventConsumerTest {
+class OrderEventConsumerTest {
 
     @Mock
     private OrderQueryRepository orderQueryRepository;
 
     @Mock
-    private PaymentQueryRepository paymentQueryRepository;
+    private OrderQueryService orderQueryService;
 
     @Mock
-    private OrderQueryService  orderQueryService;
+    private IdempotencyService idempotencyService;
 
-    @Mock
-    private IdempotencyService  idempotencyService;
-
-    private OrderEventConsumer orderEventConsumer;
+    private OrderEventConsumer consumer;
 
     private static final Long ORDER_ID = 1L;
     private static final Long USER_ID = 42L;
+    private static final Integer DELIVERY_ATTEMPT = 1;
 
     @BeforeEach
     void setUp() {
-        orderEventConsumer = new OrderEventConsumer(
-                orderQueryRepository, paymentQueryRepository, orderQueryService, idempotencyService
+
+        consumer = new OrderEventConsumer(
+                orderQueryRepository,
+                orderQueryService,
+                idempotencyService
         );
     }
 
-    // -- onOrderCreated ------------------------------------------------------
+    private OrderCreatedEvent buildCreatedEvent() {
+
+        return OrderCreatedEvent.of(
+                ORDER_ID,
+                USER_ID,
+                OrderStatus.PENDING,
+                new BigDecimal("100.00"),
+                LocalDateTime.now(),
+                List.of(
+                        new OrderCreatedEvent.ItemDTO(
+                                10L,
+                                "Produto X",
+                                new BigDecimal("100.00"),
+                                1
+                        )
+                )
+        );
+    }
+
+    private ProcessedEventEntity processed(String topic) {
+
+        return ProcessedEventEntity.claim(
+                "event-123",
+                topic
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // onOrderCreated()
+    // ---------------------------------------------------------------------
 
     @Nested
     @DisplayName("onOrderCreated()")
-    class onOrderCreated {
-
-        private OrderCreatedEvent buildEvent() {
-            return OrderCreatedEvent.of(ORDER_ID, USER_ID, OrderStatus.PENDING, new BigDecimal("100.00"), LocalDateTime.now(),
-                    List.of(new OrderCreatedEvent.ItemDTO(10L, "Produto X", new BigDecimal("100.00"),1)));
-        }
+    class OnOrderCreated {
 
         @Test
-        @DisplayName("não deve processar quando idempotencyService retorna false")
-        void shouldSkipWhenNotIdempotent() {
-            OrderCreatedEvent event = buildEvent();
-            when(idempotencyService.isNew(event.eventId(), "order.created")).thenReturn(false);
+        @DisplayName("Should ignore duplicated event")
+        void shouldIgnoreDuplicatedEvent() {
 
-            orderEventConsumer.onOrderCreated(event);
+            OrderCreatedEvent event = buildCreatedEvent();
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_CREATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(null);
+
+            consumer.onOrderCreated(event, DELIVERY_ATTEMPT);
 
             verifyNoInteractions(orderQueryRepository);
             verifyNoInteractions(orderQueryService);
         }
 
         @Test
-        @DisplayName("não deve salvar quando o orderId já existe na projeção (guarda extra)")
-        void shouldSkipWhenOrderAlreadyExistsInProjection() {
-            OrderCreatedEvent event = buildEvent();
-            when(idempotencyService.isNew(event.eventId(), "order.created")).thenReturn(true);
-            when(orderQueryRepository.existsByOrderId(ORDER_ID)).thenReturn(true);
+        @DisplayName("Should ignore when projection already exists")
+        void shouldIgnoreWhenProjectionAlreadyExists() {
 
-            orderEventConsumer.onOrderCreated(event);
+            OrderCreatedEvent event = buildCreatedEvent();
 
-            verify(orderQueryRepository, never()).save(any());
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_CREATED);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_CREATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.existsByOrderId(ORDER_ID))
+                    .thenReturn(true);
+
+            consumer.onOrderCreated(event, DELIVERY_ATTEMPT);
+
+            verify(orderQueryRepository, never())
+                    .save(any());
+
+            verify(idempotencyService)
+                    .markCompleted(processed);
         }
 
         @Test
-        @DisplayName("deve salvar a projeção e invalidar o cache da lista quando é novo")
-        void shouldSaveProjectionAndEvictCacheWhenNew() {
-            OrderCreatedEvent event = buildEvent();
-            when(idempotencyService.isNew(event.eventId(), "order.created")).thenReturn(true);
-            when(orderQueryRepository.existsByOrderId(ORDER_ID)).thenReturn(false);
+        @DisplayName("Should create projection successfully")
+        void shouldCreateProjectionSuccessfully() {
 
-            orderEventConsumer.onOrderCreated(event);
+            OrderCreatedEvent event = buildCreatedEvent();
 
-            verify(orderQueryRepository).save(any(OrderQueryEntity.class));
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_CREATED);
 
-            verify(orderQueryService).evictUserOrdersCache();
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_CREATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.existsByOrderId(ORDER_ID))
+                    .thenReturn(false);
+
+            consumer.onOrderCreated(event, DELIVERY_ATTEMPT);
+
+            verify(orderQueryRepository)
+                    .save(any(OrderQueryEntity.class));
+
+            verify(orderQueryService)
+                    .evictUserOrdersCache();
+
+            verify(idempotencyService)
+                    .markCompleted(processed);
+
+            verify(idempotencyService, never())
+                    .markFailed(any());
         }
 
-        // -- onOrderStatusChanged --------------------------------------------
+        @Test
+        @DisplayName("Should mark event as failed when save throws exception")
+        void shouldMarkFailedWhenSaveThrowsException() {
 
-        @Nested
-        @DisplayName("onOrderStatusChanged()")
-        class onOrderStatusChanged {
+            OrderCreatedEvent event = buildCreatedEvent();
 
-            private OrderStatusChangedEvent buildEvent() {
-                return OrderStatusChangedEvent.of(
-                        ORDER_ID,USER_ID,OrderStatus.PENDING,OrderStatus.AWAITING_PAYMENT);
-            }
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_CREATED);
 
-            @Test
-            @DisplayName("não deve processar quando idempotencyService retorna false")
-            void shouldSkipWhenNotIdempotent() {
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_CREATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
 
-                OrderStatusChangedEvent event = buildEvent();
-                when(idempotencyService.isNew(event.eventId(), "order.status.changed")).thenReturn(false);
+            when(orderQueryRepository.existsByOrderId(ORDER_ID))
+                    .thenReturn(false);
 
-                orderEventConsumer.onOrderStatusChanged(event);
+            when(orderQueryRepository.save(any()))
+                    .thenThrow(new RuntimeException("Database error"));
 
-                verifyNoInteractions(orderQueryRepository);
-            }
+            assertThrows(
+                    RuntimeException.class,
+                    () -> consumer.onOrderCreated(
+                            event,
+                            DELIVERY_ATTEMPT
+                    )
+            );
 
-            @Test
-            @DisplayName("deve atualizar o status quando o pedido é encontrado na projeção")
-            void shouldUpdateStatusWhenOrderFound() {
+            verify(idempotencyService)
+                    .markFailed(processed);
 
-                OrderStatusChangedEvent event = buildEvent();
-                OrderQueryEntity order = mock(OrderQueryEntity.class);
-
-                when(idempotencyService.isNew(event.eventId(), "order.status.changed")).thenReturn(true);
-
-                when(orderQueryRepository.findByOrderId(ORDER_ID))
-                        .thenReturn(Optional.of(order));
-
-                orderEventConsumer.onOrderStatusChanged(event);
-
-                verify(order).updateStatus(OrderStatus.AWAITING_PAYMENT);
-                verify(orderQueryRepository).save(order);
-                verify(orderQueryService).evictOrderCache(ORDER_ID);
-                verify(orderQueryService).evictUserOrdersCache();
-            }
-
-            @Test
-            @DisplayName("não deve lançar exceção quando o pedido não existe na projeção")
-            void shouldNotThrowWhenOrderNotFoundInProjection() {
-                OrderStatusChangedEvent event = buildEvent();
-                when(idempotencyService.isNew(event.eventId(), "order.status.changed"))
-                        .thenReturn(true);
-                when(orderQueryRepository.findByOrderId(ORDER_ID))
-                        .thenReturn(Optional.empty());
-
-                orderEventConsumer.onOrderStatusChanged(event);
-
-                verify(orderQueryRepository, never()).save(any());
-            }
+            verify(idempotencyService, never())
+                    .markCompleted(processed);
         }
 
-        // -- onOrderCancelled ------------------------------------------------
+        @Test
+        @DisplayName("Should mark event as failed when cache eviction fails")
+        void shouldMarkFailedWhenCacheEvictionFails() {
 
-        @Nested
-        @DisplayName("onOrderCancelled()")
-        class onOrderCancelled {
+            OrderCreatedEvent event = buildCreatedEvent();
 
-            private OrderCancelledEvent buildEvent() {
-                return OrderCancelledEvent.of(
-                        ORDER_ID, USER_ID, "mp-123", new BigDecimal("100.00"), "Cliente desistiu");
-            }
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_CREATED);
 
-            @Test
-            @DisplayName("não deve processar quando idempotencyService retorna false")
-            void shouldSkipWhenNotIdempotent() {
-                OrderCancelledEvent event = buildEvent();
-                when(idempotencyService.isNew(event.eventId(), "order.cancelled"))
-                        .thenReturn(false);
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_CREATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
 
-                orderEventConsumer.onOrderCancelled(event);
+            when(orderQueryRepository.existsByOrderId(ORDER_ID))
+                    .thenReturn(false);
 
-                verifyNoInteractions(orderQueryRepository);
-            }
+            doThrow(new RuntimeException("Redis unavailable"))
+                    .when(orderQueryService)
+                    .evictUserOrdersCache();
 
-            @Test
-            @DisplayName("deve marcar o pedido como CANCELLED na projeção")
-            void shouldMarkOrderAsCancelledInProjection() {
-                OrderCancelledEvent event = buildEvent();
-                OrderQueryEntity order = mock(OrderQueryEntity.class);
+            assertThrows(
+                    RuntimeException.class,
+                    () -> consumer.onOrderCreated(
+                            event,
+                            DELIVERY_ATTEMPT
+                    )
+            );
 
-                when(idempotencyService.isNew(event.eventId(), "order.cancelled"))
-                        .thenReturn(true);
-                when(orderQueryRepository.findByOrderId(ORDER_ID))
-                        .thenReturn(Optional.of(order));
-
-                orderEventConsumer.onOrderCancelled(event);
-
-                verify(order).updateStatus(OrderStatus.CANCELLED);
-                verify(orderQueryRepository).save(order);
-            }
+            verify(idempotencyService)
+                    .markFailed(processed);
         }
-
-
-
     }
 
+    // ---------------------------------------------------------------------
+// onOrderStatusChanged()
+// ---------------------------------------------------------------------
 
+    @Nested
+    @DisplayName("onOrderStatusChanged()")
+    class OnOrderStatusChanged {
+
+        private OrderStatusChangedEvent buildEvent() {
+
+            return OrderStatusChangedEvent.of(
+                    ORDER_ID,
+                    USER_ID,
+                    OrderStatus.PENDING,
+                    OrderStatus.AWAITING_PAYMENT
+            );
+        }
+
+        @Test
+        @DisplayName("Should ignore duplicated event")
+        void shouldIgnoreDuplicatedEvent() {
+
+            OrderStatusChangedEvent event = buildEvent();
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_UPDATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(null);
+
+            consumer.onOrderStatusChanged(
+                    event,
+                    DELIVERY_ATTEMPT
+            );
+
+            verifyNoInteractions(orderQueryRepository);
+        }
+
+        @Test
+        @DisplayName("Should update order status successfully")
+        void shouldUpdateOrderStatusSuccessfully() {
+
+            OrderStatusChangedEvent event = buildEvent();
+
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_UPDATED);
+
+            OrderQueryEntity order = mock(OrderQueryEntity.class);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_UPDATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.findByOrderId(ORDER_ID))
+                    .thenReturn(Optional.of(order));
+
+            consumer.onOrderStatusChanged(
+                    event,
+                    DELIVERY_ATTEMPT
+            );
+
+            verify(order)
+                    .updateStatus(OrderStatus.AWAITING_PAYMENT);
+
+            verify(orderQueryRepository)
+                    .save(order);
+
+            verify(orderQueryService)
+                    .evictOrderCache(ORDER_ID);
+
+            verify(orderQueryService)
+                    .evictUserOrdersCache();
+
+            verify(idempotencyService)
+                    .markCompleted(processed);
+
+            verify(idempotencyService, never())
+                    .markFailed(any());
+        }
+
+        @Test
+        @DisplayName("Should throw when projection does not exist")
+        void shouldThrowWhenProjectionDoesNotExist() {
+
+            OrderStatusChangedEvent event = buildEvent();
+
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_UPDATED);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_UPDATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.findByOrderId(ORDER_ID))
+                    .thenReturn(Optional.empty());
+
+            assertThrows(
+                    IllegalStateException.class,
+                    () -> consumer.onOrderStatusChanged(
+                            event,
+                            DELIVERY_ATTEMPT
+                    )
+            );
+
+            verify(idempotencyService)
+                    .markFailed(processed);
+
+            verify(idempotencyService, never())
+                    .markCompleted(processed);
+        }
+
+        @Test
+        @DisplayName("Should mark failed when save throws exception")
+        void shouldMarkFailedWhenSaveThrowsException() {
+
+            OrderStatusChangedEvent event = buildEvent();
+
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_UPDATED);
+
+            OrderQueryEntity order = mock(OrderQueryEntity.class);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_UPDATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.findByOrderId(ORDER_ID))
+                    .thenReturn(Optional.of(order));
+
+            when(orderQueryRepository.save(order))
+                    .thenThrow(new RuntimeException("Database error"));
+
+            assertThrows(
+                    RuntimeException.class,
+                    () -> consumer.onOrderStatusChanged(
+                            event,
+                            DELIVERY_ATTEMPT
+                    )
+            );
+
+            verify(idempotencyService)
+                    .markFailed(processed);
+
+            verify(idempotencyService, never())
+                    .markCompleted(processed);
+        }
+
+        @Test
+        @DisplayName("Should mark failed when cache eviction throws exception")
+        void shouldMarkFailedWhenCacheEvictionThrowsException() {
+
+            OrderStatusChangedEvent event = buildEvent();
+
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_UPDATED);
+
+            OrderQueryEntity order = mock(OrderQueryEntity.class);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_UPDATED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.findByOrderId(ORDER_ID))
+                    .thenReturn(Optional.of(order));
+
+            doThrow(new RuntimeException("Redis unavailable"))
+                    .when(orderQueryService)
+                    .evictOrderCache(ORDER_ID);
+
+            assertThrows(
+                    RuntimeException.class,
+                    () -> consumer.onOrderStatusChanged(
+                            event,
+                            DELIVERY_ATTEMPT
+                    )
+            );
+
+            verify(idempotencyService)
+                    .markFailed(processed);
+
+            verify(idempotencyService, never())
+                    .markCompleted(processed);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+// onOrderCancelled()
+// ---------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("onOrderCancelled()")
+    class OnOrderCancelled {
+
+        private OrderCancelledEvent buildEvent() {
+
+            return OrderCancelledEvent.of(
+                    ORDER_ID,
+                    USER_ID,
+                    "payment-123",
+                    new BigDecimal("100.00"),
+                    "Customer cancelled order"
+            );
+        }
+
+        @Test
+        @DisplayName("Should ignore duplicated event")
+        void shouldIgnoreDuplicatedEvent() {
+
+            OrderCancelledEvent event = buildEvent();
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_DELETED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(null);
+
+            consumer.onOrderCancelled(
+                    event,
+                    DELIVERY_ATTEMPT
+            );
+
+            verifyNoInteractions(orderQueryRepository);
+        }
+
+        @Test
+        @DisplayName("Should cancel order successfully")
+        void shouldCancelOrderSuccessfully() {
+
+            OrderCancelledEvent event = buildEvent();
+
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_DELETED);
+
+            OrderQueryEntity order = mock(OrderQueryEntity.class);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_DELETED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.findByOrderId(ORDER_ID))
+                    .thenReturn(Optional.of(order));
+
+            consumer.onOrderCancelled(
+                    event,
+                    DELIVERY_ATTEMPT
+            );
+
+            verify(order)
+                    .updateStatus(OrderStatus.CANCELLED);
+
+            verify(orderQueryRepository)
+                    .save(order);
+
+            verify(orderQueryService)
+                    .evictOrderCache(ORDER_ID);
+
+            verify(orderQueryService)
+                    .evictUserOrdersCache();
+
+            verify(idempotencyService)
+                    .markCompleted(processed);
+
+            verify(idempotencyService, never())
+                    .markFailed(any());
+        }
+
+        @Test
+        @DisplayName("Should throw when projection does not exist")
+        void shouldThrowWhenProjectionDoesNotExist() {
+
+            OrderCancelledEvent event = buildEvent();
+
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_DELETED);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_DELETED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.findByOrderId(ORDER_ID))
+                    .thenReturn(Optional.empty());
+
+            assertThrows(
+                    IllegalStateException.class,
+                    () -> consumer.onOrderCancelled(
+                            event,
+                            DELIVERY_ATTEMPT
+                    )
+            );
+
+            verify(idempotencyService)
+                    .markFailed(processed);
+
+            verify(idempotencyService, never())
+                    .markCompleted(processed);
+        }
+
+        @Test
+        @DisplayName("Should mark failed when save throws exception")
+        void shouldMarkFailedWhenSaveThrowsException() {
+
+            OrderCancelledEvent event = buildEvent();
+
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_DELETED);
+
+            OrderQueryEntity order = mock(OrderQueryEntity.class);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_DELETED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.findByOrderId(ORDER_ID))
+                    .thenReturn(Optional.of(order));
+
+            when(orderQueryRepository.save(order))
+                    .thenThrow(new RuntimeException("Database error"));
+
+            assertThrows(
+                    RuntimeException.class,
+                    () -> consumer.onOrderCancelled(
+                            event,
+                            DELIVERY_ATTEMPT
+                    )
+            );
+
+            verify(idempotencyService)
+                    .markFailed(processed);
+
+            verify(idempotencyService, never())
+                    .markCompleted(processed);
+        }
+
+        @Test
+        @DisplayName("Should mark failed when cache eviction throws exception")
+        void shouldMarkFailedWhenCacheEvictionThrowsException() {
+
+            OrderCancelledEvent event = buildEvent();
+
+            ProcessedEventEntity processed =
+                    processed(OrderTopics.ORDER_DELETED);
+
+            OrderQueryEntity order = mock(OrderQueryEntity.class);
+
+            when(idempotencyService.tryClaim(
+                    event.eventId(),
+                    OrderTopics.ORDER_DELETED,
+                    DELIVERY_ATTEMPT
+            )).thenReturn(processed);
+
+            when(orderQueryRepository.findByOrderId(ORDER_ID))
+                    .thenReturn(Optional.of(order));
+
+            doThrow(new RuntimeException("Redis unavailable"))
+                    .when(orderQueryService)
+                    .evictUserOrdersCache();
+
+            assertThrows(
+                    RuntimeException.class,
+                    () -> consumer.onOrderCancelled(
+                            event,
+                            DELIVERY_ATTEMPT
+                    )
+            );
+
+            verify(idempotencyService)
+                    .markFailed(processed);
+
+            verify(idempotencyService, never())
+                    .markCompleted(processed);
+        }
+    }
 }
