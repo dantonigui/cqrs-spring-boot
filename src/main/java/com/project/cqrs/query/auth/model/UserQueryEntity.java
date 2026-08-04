@@ -1,7 +1,9 @@
 package com.project.cqrs.query.auth.model;
 
 import com.project.cqrs.command.auth.model.UserRole;
+import com.project.cqrs.shared.event.product.ProductUpdateEvent;
 import com.project.cqrs.shared.event.user.UserCreatedEvent;
+import com.project.cqrs.shared.event.user.UserUpdatedEvent;
 import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
@@ -47,7 +49,11 @@ public class UserQueryEntity {
         );
     }
 
-    public void updateUserEmail(String userEmail) {
-        this.userEmail = userEmail;
+    public void applyUpdateEvent(UserUpdatedEvent event) {
+        this.userId = event.getUserId();
+        this.userName = event.getUserName();
+        this.userEmail = event.getUserEmail();
+        this.userPicture = event.getUserPicture();
+        this.userRole = event.getUserRole();
     }
 }
