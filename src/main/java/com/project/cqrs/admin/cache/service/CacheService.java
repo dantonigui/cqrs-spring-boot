@@ -1,6 +1,7 @@
 package com.project.cqrs.admin.cache.service;
 
 import com.project.cqrs.config.redis.RedisConfig;
+import com.project.cqrs.shared.redis.topics.CacheTopics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -61,8 +62,8 @@ public class CacheService {
     }
 
     public void evictAllProductCaches() {
-        long listCount   = evictByPattern("cqrs:" + RedisConfig.CACHE_PRODUCTS + "::*");
-        long detailCount = evictByPattern("cqrs:" + RedisConfig.CACHE_PRODUCT_DETAILS + "::*");
+        long listCount   = evictByPattern("cqrs:" + CacheTopics.CACHE_PRODUCTS + "::*");
+        long detailCount = evictByPattern("cqrs:" + CacheTopics.CACHE_PRODUCT_DETAILS + "::*");
         log.warn("Full cache evict: {} entradas de lista + {} detalhes removidos", listCount, detailCount);
     }
 }

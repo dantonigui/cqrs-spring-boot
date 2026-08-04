@@ -2,6 +2,7 @@ package com.project.cqrs.admin.cache.controller;
 
 import com.project.cqrs.admin.cache.service.CacheService;
 import com.project.cqrs.config.redis.RedisConfig;
+import com.project.cqrs.shared.redis.topics.CacheTopics;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -25,9 +26,9 @@ public class CacheAdminController {
      */
     @DeleteMapping("/products")
     public ResponseEntity<Map<String, Object>> evictProductList() {
-        long removed = cacheService.evictByPattern("cqrs:" + RedisConfig.CACHE_PRODUCTS + "::*");
+        long removed = cacheService.evictByPattern("cqrs:" + CacheTopics.CACHE_PRODUCTS + "::*");
         return ResponseEntity.ok(Map.of(
-                "cache", RedisConfig.CACHE_PRODUCTS,
+                "cache", CacheTopics.CACHE_PRODUCTS,
                 "entriesRemoved", removed,
                 "message", "Cache de lista de produtos invalidado"
         ));
@@ -38,10 +39,10 @@ public class CacheAdminController {
      */
     @DeleteMapping("/product-detail/{id}")
     public ResponseEntity<Map<String, Object>> evictProductDetail(@PathVariable Long id) {
-        String key = "cqrs:" + RedisConfig.CACHE_PRODUCT_DETAILS + "::" + id;
+        String key = "cqrs:" + CacheTopics.CACHE_PRODUCT_DETAILS + "::" + id;
         boolean removed = cacheService.evict(key);
         return ResponseEntity.ok(Map.of(
-                "cache", RedisConfig.CACHE_PRODUCT_DETAILS,
+                "cache", CacheTopics.CACHE_PRODUCT_DETAILS,
                 "productId", id,
                 "removed", removed
         ));
@@ -61,7 +62,7 @@ public class CacheAdminController {
      */
     @GetMapping("/stats/{id}")
     public ResponseEntity<Map<String, Object>> cacheStats(@PathVariable Long id) {
-        String detailKey = "cqrs:" + RedisConfig.CACHE_PRODUCT_DETAILS + "::" + id;
+        String detailKey = "cqrs:" + CacheTopics.CACHE_PRODUCT_DETAILS + "::" + id;
         boolean exists = cacheService.exists(detailKey);
         long ttl = cacheService.getTtl(detailKey);
 
@@ -79,8 +80,8 @@ public class CacheAdminController {
      */
     @GetMapping("/keys")
     public ResponseEntity<Map<String, Object>> listCacheKeys() {
-        Set<String> productKeys = cacheService.listKeys("cqrs:" + RedisConfig.CACHE_PRODUCTS + "::*");
-        Set<String> detailKeys  = cacheService.listKeys("cqrs:" + RedisConfig.CACHE_PRODUCT_DETAILS + "::*");
+        Set<String> productKeys = cacheService.listKeys("cqrs:" + CacheTopics.CACHE_PRODUCTS + "::*");
+        Set<String> detailKeys  = cacheService.listKeys("cqrs:" + CacheTopics.CACHE_PRODUCT_DETAILS + "::*");
 
         return ResponseEntity.ok(Map.of(
                 "productListKeys", productKeys,
