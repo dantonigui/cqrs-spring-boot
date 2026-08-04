@@ -1,6 +1,7 @@
 package com.project.cqrs.command.payment.kafka.producer;
 
 import com.project.cqrs.shared.event.payment.PaymentApprovedEvent;
+import com.project.cqrs.shared.kafka.topics.PaymentTopics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -11,7 +12,6 @@ public class PaymentEventProducer {
 
     private static final Logger LOG = LoggerFactory.getLogger(PaymentEventProducer.class);
 
-    public static final String TOPIC_PAYMENT_APPROVED = "payment-approved";//trocar no futuro
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -20,7 +20,7 @@ public class PaymentEventProducer {
     }
 
     public void publishPaymentApproved(String orderId, PaymentApprovedEvent paymentApprovedEvent) {
-        kafkaTemplate.send(TOPIC_PAYMENT_APPROVED, orderId, paymentApprovedEvent)
+        kafkaTemplate.send(PaymentTopics.PAYMENT_APPROVED, orderId, paymentApprovedEvent)
                 .whenComplete((result, error) -> {
                     if (error != null) {
                         LOG.error(

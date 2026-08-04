@@ -1,5 +1,6 @@
-package com.project.cqrs.config.redis;
+package com.project.cqrs.admin.cache.service;
 
+import com.project.cqrs.config.redis.RedisConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;

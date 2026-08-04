@@ -1,8 +1,11 @@
 package com.project.cqrs.shared.event.product;
 
+import lombok.Getter;
+
 import java.time.Instant;
 import java.util.UUID;
 
+@Getter
 public abstract sealed class ProductEvent permits ProductCreateEvent, ProductUpdateEvent, ProductDeleteEvent{
 
     private  String eventId;
@@ -23,15 +26,4 @@ public abstract sealed class ProductEvent permits ProductCreateEvent, ProductUpd
 
     }
 
-    public String getEventId() {
-        return eventId;
-    }
-
-    public Long getProductId() {
-        return productId;
-    }
-
-    public Instant getOccurredAt() {
-        return occurredAt;
-    }
 }

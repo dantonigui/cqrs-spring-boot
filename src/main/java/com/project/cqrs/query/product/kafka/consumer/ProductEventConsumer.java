@@ -1,5 +1,6 @@
 package com.project.cqrs.query.product.kafka.consumer;
 
+import com.project.cqrs.admin.cache.service.CacheSynchronizationService;
 import com.project.cqrs.admin.idempotency.entity.ProcessedEventEntity;
 import com.project.cqrs.admin.idempotency.service.IdempotencyService;
 import com.project.cqrs.config.redis.RedisConfig;
@@ -28,13 +29,14 @@ public class ProductEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(ProductEventConsumer.class);
     private final ProductQueryRepository repository;
-    private final CacheManager cacheManager;
     private final IdempotencyService idempotencyService;
+    private final CacheSynchronizationService  cacheSynchronizationService;
 
-    public ProductEventConsumer(ProductQueryRepository repository, CacheManager cacheManager, IdempotencyService idempotencyService) {
+    public ProductEventConsumer(ProductQueryRepository repository,
+                                IdempotencyService idempotencyService,  CacheSynchronizationService cacheSynchronizationService) {
         this.repository = repository;
-        this.cacheManager = cacheManager;
         this.idempotencyService = idempotencyService;
+        this.cacheSynchronizationService = cacheSynchronizationService;
     }
 
     @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED, groupId= KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
@@ -51,9 +53,11 @@ public class ProductEventConsumer {
 
             ProductQueryEntity saved =  repository.save(entity);
 
-            putDetailInCache(ProductQueryDTO.from(saved));
+            cacheSynchronizationService.putProductDetailInCache(ProductQueryDTO.from(saved));
 
-            evictProductListCache();
+            cacheSynchronizationService.evictProductListCache();
+
+            idempotencyService.markCompleted(processed);
 
             log.info("Cache sincronizado após criação do produto id={}", event.getProductId());
         } catch (Exception e) {
@@ -79,9 +83,11 @@ public class ProductEventConsumer {
 
             ProductQueryEntity saved =  repository.save(entity);
 
-            putDetailInCache(ProductQueryDTO.from(saved));
+            cacheSynchronizationService.putProductDetailInCache(ProductQueryDTO.from(saved));
 
-            evictProductListCache();
+            cacheSynchronizationService.evictProductListCache();
+
+            idempotencyService.markCompleted(processed);
 
         }  catch (Exception e) {
             idempotencyService.markFailed(processed);
@@ -106,36 +112,16 @@ public class ProductEventConsumer {
             repository.findById(event.getProductId())
                     .ifPresent(repository::delete);
 
-            evictDetailFromCache(event.getProductId());
+            cacheSynchronizationService.evictDetailFromCache(event.getProductId());
 
-            evictProductListCache();
+            cacheSynchronizationService.evictProductListCache();
+
+            idempotencyService.markCompleted(processed);
 
         } catch (Exception e) {
             idempotencyService.markFailed(processed);
 
             throw e;
-        }
-    }
-
-    private void putDetailInCache(ProductQueryDTO dto) {
-        Cache cache = cacheManager.getCache(RedisConfig.CACHE_PRODUCT_DETAILS);
-
-        if(cache != null) {
-            cache.put(dto.productId(), dto);
-        }
-    }
-
-    private void evictDetailFromCache(Long productId) {
-        Cache cache = cacheManager.getCache(RedisConfig.CACHE_PRODUCT_DETAILS);
-        if(cache != null) {
-            cache.evict(productId);
-        }
-    }
-
-    private void evictProductListCache() {
-        Cache cache = cacheManager.getCache(RedisConfig.CACHE_PRODUCTS);
-        if(cache != null) {
-            cache.clear();
         }
     }
 }
