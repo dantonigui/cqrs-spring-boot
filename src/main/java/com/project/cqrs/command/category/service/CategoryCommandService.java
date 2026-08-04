@@ -27,21 +27,13 @@ public class CategoryCommandService {
 
     public void createCategory(CreateCategoryRequestDTO requestDTO) {
 
-        CategoryCommandEntity categoryEntity =
-                CategoryCommandEntity.createCategory(
-                        requestDTO.categoryName()
-                );
+        CategoryCommandEntity categoryEntity = CategoryCommandEntity.createCategory(requestDTO.categoryName());
 
-        CategoryCommandEntity savedCategory =
-                categoryRepository.save(categoryEntity);
+        CategoryCommandEntity savedCategory = categoryRepository.save(categoryEntity);
 
-        CategoryCreateEvent event =
-                CategoryCreateEvent.fromEntity(savedCategory);
+        CategoryCreateEvent event = CategoryCreateEvent.fromEntity(savedCategory);
 
-        categoryEventProducer.sendCategoryCreated(
-                savedCategory.getCategoryId().toString(),
-                event
-        );
+        categoryEventProducer.sendCategoryCreated(savedCategory.getCategoryId().toString(), event);
     }
 
     public void deleteCategoryById(Long id) {

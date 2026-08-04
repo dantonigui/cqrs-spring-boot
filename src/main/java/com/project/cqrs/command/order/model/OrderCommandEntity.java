@@ -15,7 +15,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
-@Table(name = "orders")
+@Table(name = "order_command")
 public class OrderCommandEntity {
 
     @Id

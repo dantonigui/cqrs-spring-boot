@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
-@Table(name = "order_items")
+@Table(name = "order_command_items")
 public class OrderItemCommandEntity {
 
     @Id

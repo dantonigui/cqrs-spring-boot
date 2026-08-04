@@ -12,6 +12,7 @@ import com.project.cqrs.command.product.kafka.producer.ProductEventProducer;
 import com.project.cqrs.command.product.model.ProductCommandEntity;
 import com.project.cqrs.command.product.repository.ProductRepository;
 import com.project.cqrs.config.exception.ResourceNotFoundException;
+import com.project.cqrs.shared.redis.topics.CacheTopics;
 import jakarta.transaction.Transactional;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
@@ -30,8 +31,8 @@ public class ProductCommandService {
         this.eventProducer = eventProducer;
     }
 
-    @Transactional
-    @CacheEvict(cacheNames = RedisConfig.CACHE_PRODUCTS, allEntries = true)
+    @Transactional()
+    @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCTS, allEntries = true)
     public void createProduct(CreateProductRequestDTO productDto) {
         CategoryCommandEntity category = categoryRepository.findById(productDto.categoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found" + productDto.categoryId()));
@@ -46,8 +47,8 @@ public class ProductCommandService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(cacheNames = RedisConfig.CACHE_PRODUCTS, allEntries = true),
-            @CacheEvict(cacheNames = RedisConfig.CACHE_PRODUCT_DETAILS, key = "#id")
+            @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCTS, allEntries = true),
+            @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCT_DETAILS, key = "#id")
     })
     public void updateProduct(Long id, UpdateProductRequestDTO requestDTO) {
         ProductCommandEntity  productEntity = productRepository.findById(id)
@@ -67,8 +68,8 @@ public class ProductCommandService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(cacheNames = RedisConfig.CACHE_PRODUCTS, allEntries = true),
-            @CacheEvict(cacheNames = RedisConfig.CACHE_PRODUCT_DETAILS, key = "#id")
+            @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCTS, allEntries = true),
+            @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCT_DETAILS, key = "#id")
     })
     public void deleteProduct(Long id) {
             ProductCommandEntity product = productRepository.findById(id)
