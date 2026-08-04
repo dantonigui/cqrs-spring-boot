@@ -1,6 +1,8 @@
 package com.project.cqrs.admin.dlq.infrastructure;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -15,38 +17,38 @@ public class DlqConsumerFactory {
 
     public KafkaConsumer<String, String> create() {
 
-        Properties props = new Properties();
+        Properties properties = new Properties();
 
-        props.put(
-                "bootstrap.servers",
+        properties.put(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 bootstrapServers
         );
 
-        props.put(
-                "group.id",
+        properties.put(
+                ConsumerConfig.GROUP_ID_CONFIG,
                 "dlq-admin-" + UUID.randomUUID()
         );
 
-        props.put(
-                "key.deserializer",
-                "org.apache.kafka.common.serialization.StringDeserializer"
+        properties.put(
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class
         );
 
-        props.put(
-                "value.deserializer",
-                "org.apache.kafka.common.serialization.StringDeserializer"
+        properties.put(
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class
         );
 
-        props.put(
-                "auto.offset.reset",
+        properties.put(
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
                 "earliest"
         );
 
-        props.put(
-                "enable.auto.commit",
-                "false"
+        properties.put(
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+                false
         );
 
-        return new KafkaConsumer<>(props);
+        return new KafkaConsumer<>(properties);
     }
 }

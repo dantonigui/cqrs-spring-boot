@@ -36,7 +36,7 @@ import static org.mockito.Mockito.*;
 class DlqReplayGatewayTest {
 
     @Mock private DlqConsumerFactory        consumerFactory;
-    @Mock private KafkaTemplate<Object, Object> kafkaTemplate;
+    @Mock private KafkaTemplate<String, Object> kafkaTemplate;
 
     @SuppressWarnings("unchecked")
     private final KafkaConsumer<String, String> consumer = mock(KafkaConsumer.class);
