@@ -8,13 +8,11 @@ import java.util.UUID;
 @Getter
 public abstract sealed class ProductEvent permits ProductCreateEvent, ProductUpdateEvent, ProductDeleteEvent{
 
-    private  String eventId;
+    private final String eventId;
 
     private  Long productId;
 
-    private Instant occurredAt;
-
-
+    private final Instant occurredAt;
 
     protected ProductEvent(Long productId) {
         this.eventId = UUID.randomUUID().toString();
@@ -23,7 +21,8 @@ public abstract sealed class ProductEvent permits ProductCreateEvent, ProductUpd
     }
 
     protected ProductEvent() {
-
+        this.eventId = UUID.randomUUID().toString();
+        this.occurredAt = Instant.now();
     }
 
 }

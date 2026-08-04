@@ -11,6 +11,7 @@ public final class CategoryDeleteEvent extends CategoryEvent {
 
     public CategoryDeleteEvent(Long categoryId) {
         super(categoryId);
+        this.categoryId = categoryId;
     }
 
     public CategoryDeleteEvent() {}

@@ -2,27 +2,26 @@ package com.project.cqrs.shared.event.category;
 
 import com.project.cqrs.command.category.model.CategoryCommandEntity;
 import lombok.Getter;
-import lombok.Setter;
-import org.springframework.stereotype.Component;
+import lombok.NoArgsConstructor;
 
-@Setter
 @Getter
-public final class CategoryUpdateEvent extends CategoryEvent{
+@NoArgsConstructor
+public final class CategoryUpdateEvent extends CategoryEvent {
 
-    private Long categoryId;
     private String categoryName;
 
-    public CategoryUpdateEvent(Long categoryId, String categoryName) {
+    public CategoryUpdateEvent(
+            Long categoryId,
+            String categoryName
+    ) {
         super(categoryId);
         this.categoryName = categoryName;
     }
 
-    public CategoryUpdateEvent() {}
-
-    public static CategoryUpdateEvent fromEntity(CategoryCommandEntity categoryCommandEntity) {
+    public static CategoryUpdateEvent fromEntity(CategoryCommandEntity entity) {
         return new CategoryUpdateEvent(
-                categoryCommandEntity.getCategoryId(),
-                categoryCommandEntity.getCategoryName());
+                entity.getCategoryId(),
+                entity.getCategoryName()
+        );
     }
-
 }
