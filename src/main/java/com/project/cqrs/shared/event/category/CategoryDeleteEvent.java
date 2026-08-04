@@ -2,13 +2,15 @@ package com.project.cqrs.shared.event.category;
 
 
 import com.project.cqrs.command.category.model.CategoryCommandEntity;
+import lombok.Getter;
 
-public class CategoryDeleteEvent {
+@Getter
+public final class CategoryDeleteEvent extends CategoryEvent {
 
     private Long categoryId;
 
     public CategoryDeleteEvent(Long categoryId) {
-        this.categoryId = categoryId;
+        super(categoryId);
     }
 
     public CategoryDeleteEvent() {}
@@ -17,7 +19,4 @@ public class CategoryDeleteEvent {
         return new CategoryDeleteEvent(entity.getCategoryId());
     }
 
-    public Long getCategoryId() {
-        return categoryId;
-    }
 }

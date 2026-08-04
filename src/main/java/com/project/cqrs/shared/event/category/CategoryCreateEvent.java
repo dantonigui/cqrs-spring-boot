@@ -1,19 +1,23 @@
 package com.project.cqrs.shared.event.category;
 
 import com.project.cqrs.command.category.model.CategoryCommandEntity;
+import lombok.Getter;
+import lombok.Setter;
 
 
-public class CategoryCreateEvent {
+@Setter
+@Getter
+public final class CategoryCreateEvent extends CategoryEvent {
 
     private Long categoryId;
     private String categoryName;
 
     public CategoryCreateEvent(Long categoryId, String categoryName) {
-        this.categoryId = categoryId;
+        super(categoryId);
         this.categoryName = categoryName;
     }
 
-    public CategoryCreateEvent() {}
+    private CategoryCreateEvent() {}
 
     public static CategoryCreateEvent fromEntity(CategoryCommandEntity categoryEntity) {
         return  new CategoryCreateEvent(
@@ -22,19 +26,4 @@ public class CategoryCreateEvent {
         );
     }
 
-    public Long getCategoryId() {
-        return categoryId;
-    }
-
-    public String getCategoryName() {
-        return categoryName;
-    }
-
-    public void setCategoryId(Long categoryId) {
-        this.categoryId = categoryId;
-    }
-
-    public void setCategoryName(String categoryName) {
-        this.categoryName = categoryName;
-    }
 }
