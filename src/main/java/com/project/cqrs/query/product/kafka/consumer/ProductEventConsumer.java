@@ -40,7 +40,14 @@ public class ProductEventConsumer {
     }
 
     @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED, groupId= KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
-    public void OnProductCreated(ProductCreateEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
+    public void onProductCreated(ProductCreateEvent event, @Header(value = KafkaHeaders.DELIVERY_ATTEMPT, required = false) Integer deliveryAttempt) {
+
+        log.info(
+                "PRODUCT CREATE RECEIVED id={}, name={}, category={}",
+                event.getProductId(),
+                event.getProductName(),
+                event.getCategoryId()
+        );
 
         ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_CREATED, deliveryAttempt);
 
@@ -61,13 +68,13 @@ public class ProductEventConsumer {
 
             log.info("Cache sincronizado após criação do produto id={}", event.getProductId());
         } catch (Exception e) {
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
             throw e;
         }
     }
 
     @KafkaListener(topics = ProductTopics.PRODUCTS_CREATED,  groupId= KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
-    public void OnProductUpdated(ProductUpdateEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
+    public void onProductUpdated(ProductUpdateEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
         ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_CREATED, deliveryAttempt);
 
@@ -90,7 +97,7 @@ public class ProductEventConsumer {
             idempotencyService.markCompleted(processed);
 
         }  catch (Exception e) {
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
             throw e;
         }
 
@@ -98,7 +105,7 @@ public class ProductEventConsumer {
     }
 
     @KafkaListener(topics = ProductTopics.PRODUCTS_DELETED,  groupId= KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
-    public void OnProductDeleted(ProductDeleteEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
+    public void onProductDeleted(ProductDeleteEvent event, @Header(KafkaHeaders.DELIVERY_ATTEMPT) Integer deliveryAttempt) {
 
         ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), ProductTopics.PRODUCTS_DELETED,deliveryAttempt);
 
@@ -119,7 +126,7 @@ public class ProductEventConsumer {
             idempotencyService.markCompleted(processed);
 
         } catch (Exception e) {
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
 
             throw e;
         }

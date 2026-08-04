@@ -5,6 +5,7 @@ import com.project.cqrs.config.redis.RedisConfig;
 import com.project.cqrs.query.product.dto.response.ProductQueryDTO;
 import com.project.cqrs.query.product.repository.ProductQueryRepository;
 import com.project.cqrs.shared.dto.PageResponseDTO;
+import com.project.cqrs.shared.redis.topics.CacheTopics;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,9 +26,11 @@ public class ProductQueryService {
         this.productRepository = productRepository;
     }
 
-    @Cacheable(cacheNames = RedisConfig.CACHE_PRODUCTS,
-            key = "'page-' + #pageable.pageNumber + '-size-' + #pageable.pageSize",
-            unless = "#result == null || #result.isEmpty()")
+    @Cacheable(
+            cacheNames = CacheTopics.CACHE_PRODUCTS,
+            key = "'page-' + #pageable.pageNumber + '-size-' + #pageable.pageSize + '-sort-' + #pageable.sort.toString()",
+            unless = "#result == null"
+    )
     @Transactional(readOnly = true)
     public PageResponseDTO<ProductQueryDTO> findAll(Pageable pageable) {
 
@@ -39,7 +42,7 @@ public class ProductQueryService {
     }
 
     @Cacheable(
-            cacheNames = RedisConfig.CACHE_PRODUCT_DETAILS,
+            cacheNames = CacheTopics.CACHE_PRODUCT_DETAILS,
             key = "#id",
             unless = "#result == null || #result.isEmpty()"
     )
@@ -51,7 +54,7 @@ public class ProductQueryService {
     }
 
     @Cacheable(
-            cacheNames = RedisConfig.CACHE_PRODUCTS,
+            cacheNames = CacheTopics.CACHE_PRODUCTS,
             key = "'category-' + #categoryId + '-page-' + #pageable.pageNumber "
                     + "+ '-size-' + #pageable.pageSize",
             unless = "#result == null || #result.isEmpty()"

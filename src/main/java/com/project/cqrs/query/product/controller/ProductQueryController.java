@@ -28,7 +28,7 @@ public class ProductQueryController {
         this.productQueryService = productQueryService;
     }
 
-    @RateLimit(requests = 100, durationSeconds = 30)
+    @RateLimit(requests = 1500, durationSeconds = 30)
     @GetMapping
     @Operation(
             summary = "Lista produtos, com filtro opcional por categoria",

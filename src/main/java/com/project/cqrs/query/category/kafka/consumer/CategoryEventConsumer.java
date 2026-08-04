@@ -39,6 +39,12 @@ public class CategoryEventConsumer {
     @KafkaListener(topics = CategoryTopics.CATEGORY_CREATED, groupId = KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
     public void onCategoriesCreated(CategoryCreateEvent event, @Header(value = KafkaHeaders.DELIVERY_ATTEMPT, required = false) Integer deliveryAttempt) {
 
+        log.info(
+                "Recebido CategoryCreateEvent: id={}, nome={}",
+                event.getCategoryId(),
+                event.getCategoryName()
+        );
+
         ProcessedEventEntity processed = idempotencyService.tryClaim(event.getEventId(), CategoryTopics.CATEGORY_CREATED, deliveryAttempt);
 
         if (processed == null) {
@@ -63,7 +69,7 @@ public class CategoryEventConsumer {
 
         } catch (Exception e) {
 
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
             throw e;
         }
     }
@@ -93,7 +99,7 @@ public class CategoryEventConsumer {
 
         } catch (Exception e) {
 
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
 
             throw e;
         }
@@ -118,7 +124,7 @@ public class CategoryEventConsumer {
 
             idempotencyService.markCompleted(processed);
         } catch (Exception e) {
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
 
             throw e;
         }

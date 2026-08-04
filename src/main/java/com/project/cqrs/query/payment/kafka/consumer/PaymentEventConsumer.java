@@ -90,7 +90,7 @@ public class PaymentEventConsumer {
                    paymentApprovedEvent.paymentId()
            );
        } catch (Exception e) {
-           idempotencyService.markFailed(processed);
+           idempotencyService.markFailed(processed, e);
 
            throw e;
        }

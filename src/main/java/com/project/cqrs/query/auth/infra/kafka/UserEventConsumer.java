@@ -56,7 +56,7 @@ public class UserEventConsumer {
             );
         } catch (Exception e) {
 
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
             throw e;
         }
 
@@ -91,7 +91,7 @@ public class UserEventConsumer {
                     userUpdatedEvent.getUserId()
             );
         } catch (Exception e) {
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
             throw e;
         }
 
@@ -110,7 +110,7 @@ public class UserEventConsumer {
         try {
             idempotencyService.markCompleted(processed);
         }  catch (Exception e) {
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
             throw e;
         }
     }

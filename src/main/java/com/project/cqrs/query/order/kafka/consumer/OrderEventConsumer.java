@@ -94,7 +94,7 @@ public class OrderEventConsumer {
                     orderCreatedEvent.orderId()
             );
         } catch (Exception e) {
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
 
             throw e;
         }
@@ -132,7 +132,7 @@ public class OrderEventConsumer {
             log.info("Order updated: orderId={}", orderStatusChangedEvent.orderId());
         } catch (Exception e) {
 
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
             throw e;
         }
     }
@@ -171,7 +171,7 @@ public class OrderEventConsumer {
 
         } catch (Exception e) {
 
-            idempotencyService.markFailed(processed);
+            idempotencyService.markFailed(processed, e);
 
             throw e;
         }
