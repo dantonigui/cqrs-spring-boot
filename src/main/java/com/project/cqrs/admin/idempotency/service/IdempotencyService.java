@@ -35,29 +35,32 @@ public class IdempotencyService {
                 return null;
             }
 
-            record.updateRetryCount(deliveryAttempt);
+            record.retry();
 
             processedEventRepository.save(record);
 
             log.info("Reprocessando evento com tentativa anterior incompleta: " +
                     "eventId={}, topic={}", eventId, topic);
+
             return record;
         }
 
         try {
             ProcessedEventEntity entity = ProcessedEventEntity.claim(eventId, topic);
 
-            entity.updateRetryCount(deliveryAttempt);
-
             return processedEventRepository.saveAndFlush(entity);
 
-        } catch (DataIntegrityViolationException e) {
-            // Race condition real: dois threads tentaram reivindicar
-            // o mesmo evento novo ao mesmo tempo. O constraint
-            // UNIQUE(event_id, topic) garante que só um vence.
-            log.warn("Race condition na idempotência: eventId={}, topic={}",
-                    eventId, topic);
-            return null;
+        } catch (DataIntegrityViolationException ex) {
+
+            log.warn(
+                    "Race condition para eventId={}, topic={}",
+                    eventId,
+                    topic
+            );
+
+            return processedEventRepository
+                    .findByEventIdAndTopic(eventId, topic)
+                    .orElse(null);
         }
     }
 
@@ -69,14 +72,10 @@ public class IdempotencyService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markFailed(ProcessedEventEntity entity) {
-        entity.markFailed();
-        processedEventRepository.save(entity);
-    }
+    public void markFailed(ProcessedEventEntity entity, Exception e) {
 
-    @Transactional
-    public void updateRetryCount(ProcessedEventEntity entity, Integer retryCount) {
-        entity.updateRetryCount(retryCount);
+        entity.markFailed(e.getMessage());
+
         processedEventRepository.save(entity);
     }
 }

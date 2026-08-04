@@ -1,6 +1,7 @@
 package com.project.cqrs.admin.idempotency.entity;
 
 import jakarta.persistence.*;
+import lombok.Getter;
 
 import java.time.LocalDateTime;
 
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
                 )
         }
 )
+@Getter
 public class ProcessedEventEntity {
 
     @Id
@@ -29,42 +31,56 @@ public class ProcessedEventEntity {
     private String topic;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(nullable = false)
     private EventStatus status;
 
-    @Column(name = "processed_at", nullable = false, updatable = false)
-    private LocalDateTime processedAt;
+    @Column(name = "claimed_at", nullable = false, updatable = false)
+    private LocalDateTime claimedAt;
 
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "retry_count", nullable = false)
     private Integer retryCount;
 
-    protected ProcessedEventEntity() {}
+    @Column(name = "error_message", length = 2000)
+    private String errorMessage;
 
-    public ProcessedEventEntity(String eventId, String topic, EventStatus status) {
-        this.eventId     = eventId;
-        this.topic       = topic;
-        this.status      = status;
-        this.processedAt = LocalDateTime.now();
+    protected ProcessedEventEntity() {
+    }
+
+    private ProcessedEventEntity(String eventId, String topic) {
+        this.eventId = eventId;
+        this.topic = topic;
+        this.status = EventStatus.PROCESSING;
+        this.claimedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
         this.retryCount = 1;
     }
 
-    public static ProcessedEventEntity claim(String eventId, String topic) {
-        return new ProcessedEventEntity(eventId, topic, EventStatus.PROCESSING);
+    public static ProcessedEventEntity claim(
+            String eventId,
+            String topic
+    ) {
+        return new ProcessedEventEntity(eventId, topic);
+    }
+
+    public void retry() {
+        this.retryCount++;
+        this.status = EventStatus.PROCESSING;
+        this.updatedAt = LocalDateTime.now();
+        this.errorMessage = null;
     }
 
     public void markCompleted() {
         this.status = EventStatus.COMPLETED;
+        this.updatedAt = LocalDateTime.now();
+        this.errorMessage = null;
     }
 
-    public void markFailed() {
+    public void markFailed(String errorMessage) {
         this.status = EventStatus.FAILED;
+        this.updatedAt = LocalDateTime.now();
+        this.errorMessage = errorMessage;
     }
-
-    public Long getId()                  { return id; }
-    public String getEventId()           { return eventId; }
-    public String getTopic()             { return topic; }
-    public LocalDateTime getProcessedAt(){ return processedAt; }
-    public EventStatus getStatus() { return status; }
-    public Integer getRetryCount() { return retryCount; }
-
-    public void updateRetryCount(Integer retryCount) { this.retryCount = retryCount; }
 }
