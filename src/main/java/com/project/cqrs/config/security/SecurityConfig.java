@@ -116,7 +116,7 @@ public class SecurityConfig {
 
                         // Query — qualquer autenticado (USER e ADMIN)
 //                        .requestMatchers("/api/v1/query/**").authenticated()
-
+                                .requestMatchers("/admin/dlq/*").permitAll()
                                 .requestMatchers("/api/v1/query/**").permitAll()
                         // Command — apenas ADMIN
 //                        .requestMatchers("/api/v1/command/**").hasRole("ADMIN")
