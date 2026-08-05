@@ -11,12 +11,9 @@ public record PageResponseDTO<T>(
         long totalElements,
         int totalPages,
         boolean first,
-        boolean last
+        boolean last,
+        boolean empty
 ) {
-
-    public boolean isEmpty() {
-        return content.isEmpty();
-    }
 
     public static <T> PageResponseDTO<T> from(Page<T> page) {
         return new PageResponseDTO<>(
@@ -26,7 +23,8 @@ public record PageResponseDTO<T>(
                 page.getTotalElements(),
                 page.getTotalPages(),
                 page.isFirst(),
-                page.isLast()
+                page.isLast(),
+                page.isEmpty()
         );
     }
 }
