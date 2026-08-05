@@ -1,10 +1,12 @@
 services:
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -22,16 +24,36 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  mysql:
+
+  mysql-command:
     image: mysql:8.0
-    container_name: mysql
+    container_name: mysql-command
     ports:
       - "3307:3306"
     environment:
-      MYSQL_DATABASE: cqrs
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: cqrs_command
+      MYSQL_USER: ${DB_COMMAND_USER}
+      MYSQL_PASSWORD: ${DB_COMMAND_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+    volumes:
+      - mysql-command-data:/var/lib/mysql
+
+
+  mysql-query:
+    image: mysql:8.0
+    container_name: mysql-query
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_DATABASE: cqrs_query
+      MYSQL_USER: ${DB_QUERY_USER}
+      MYSQL_PASSWORD: ${DB_QUERY_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+    volumes:
+      - mysql-query-data:/var/lib/mysql
+
 
   redis:
     image: redis:7.2-alpine
@@ -50,3 +72,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+
+volumes:
+
+  mysql-command-data:
+  mysql-query-data:
