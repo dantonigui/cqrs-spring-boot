@@ -15,6 +15,23 @@ class NotificationTemplateServiceTest {
     private final NotificationTemplateService service =
             new NotificationTemplateService();
 
+    @Test
+    void formatsThousandsInBrazilianCurrencyForBothTemplates() {
+        var amount = new BigDecimal("12345.67");
+        assertThat(service.paymentApproved("a@example.com", "Ana", 42L, amount, "PIX").htmlBody())
+                .contains("R$ 12.345,67");
+        assertThat(service.orderCancelled("a@example.com", "Ana", 42L, amount, "Desistência", false).htmlBody())
+                .contains("R$ 12.345,67");
+    }
+
+    @Test
+    void escapesCustomerNameAndCancellationReason() {
+        var email = service.orderCancelled("a@example.com", "<script>alert(1)</script>", 42L,
+                BigDecimal.TEN, "<img src=x onerror=alert(1)>", true);
+        assertThat(email.htmlBody()).doesNotContain("<script>", "<img src=x")
+                .contains("&lt;script&gt;", "&lt;img");
+    }
+
     @Nested
     @DisplayName("paymentApproved()")
     class PaymentApproved {
@@ -46,7 +63,7 @@ class NotificationTemplateServiceTest {
                     "cliente@teste.com", "João", 42L,
                     new BigDecimal("199.90"), "PIX");
 
-            assertThat(email.htmlBody()).contains("199.90");
+            assertThat(email.htmlBody()).contains("R$ 199,90");
         }
 
         @Test
