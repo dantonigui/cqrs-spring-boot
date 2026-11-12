@@ -26,7 +26,7 @@ public class CacheAdminController {
      */
     @DeleteMapping("/products")
     public ResponseEntity<Map<String, Object>> evictProductList() {
-        long removed = cacheService.evictByPattern("cqrs:" + CacheTopics.CACHE_PRODUCTS + "::*");
+        long removed = cacheService.evictByPattern(CacheTopics.CACHE_PRODUCTS + "::*");
         return ResponseEntity.ok(Map.of(
                 "cache", CacheTopics.CACHE_PRODUCTS,
                 "entriesRemoved", removed,
@@ -39,7 +39,7 @@ public class CacheAdminController {
      */
     @DeleteMapping("/product-detail/{id}")
     public ResponseEntity<Map<String, Object>> evictProductDetail(@PathVariable Long id) {
-        String key = "cqrs:" + CacheTopics.CACHE_PRODUCT_DETAILS + "::" + id;
+        String key = CacheTopics.CACHE_PRODUCT_DETAILS + "::" + id;
         boolean removed = cacheService.evict(key);
         return ResponseEntity.ok(Map.of(
                 "cache", CacheTopics.CACHE_PRODUCT_DETAILS,
@@ -62,7 +62,7 @@ public class CacheAdminController {
      */
     @GetMapping("/stats/{id}")
     public ResponseEntity<Map<String, Object>> cacheStats(@PathVariable Long id) {
-        String detailKey = "cqrs:" + CacheTopics.CACHE_PRODUCT_DETAILS + "::" + id;
+        String detailKey =   CacheTopics.CACHE_PRODUCT_DETAILS + "::" + id;
         boolean exists = cacheService.exists(detailKey);
         long ttl = cacheService.getTtl(detailKey);
 
@@ -80,8 +80,8 @@ public class CacheAdminController {
      */
     @GetMapping("/keys")
     public ResponseEntity<Map<String, Object>> listCacheKeys() {
-        Set<String> productKeys = cacheService.listKeys("cqrs:" + CacheTopics.CACHE_PRODUCTS + "::*");
-        Set<String> detailKeys  = cacheService.listKeys("cqrs:" + CacheTopics.CACHE_PRODUCT_DETAILS + "::*");
+        Set<String> productKeys = cacheService.listKeys(CacheTopics.CACHE_PRODUCTS + "::*");
+        Set<String> detailKeys  = cacheService.listKeys( CacheTopics.CACHE_PRODUCT_DETAILS + "::*");
 
         return ResponseEntity.ok(Map.of(
                 "productListKeys", productKeys,

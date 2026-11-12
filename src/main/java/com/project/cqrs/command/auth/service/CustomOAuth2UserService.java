@@ -34,6 +34,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         this.adminConfig = adminConfig;
     }
 
+    @org.springframework.transaction.annotation.Transactional("commandTransactionManager")
     @Override
     public OAuth2User loadUser (OAuth2UserRequest request) {
         log.info("Loading user {} custom OAuth2UserService");

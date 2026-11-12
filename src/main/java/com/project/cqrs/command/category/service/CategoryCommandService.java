@@ -11,6 +11,7 @@ import com.project.cqrs.command.category.repository.CategoryRepository;
 import com.project.cqrs.config.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 
+@org.springframework.transaction.annotation.Transactional("commandTransactionManager")
 @Service
 public class CategoryCommandService {
 

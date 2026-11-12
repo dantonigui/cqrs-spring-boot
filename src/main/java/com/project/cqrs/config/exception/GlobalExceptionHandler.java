@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -21,6 +22,14 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ErrorResponse> handleStock(InsufficientStockException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.of(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI()));
+    }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleArgument(IllegalArgumentException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(ErrorResponse.of(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI()));
+    }
     // -- 404 --------------------------------------------------
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -127,6 +136,12 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrity(org.springframework.dao.DataIntegrityViolationException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.of(HttpStatus.CONFLICT,
+                "Operação conflita com registros existentes", request.getRequestURI()));
+    }
+
     // -- 500 - Fallback ------------------------------------------------------
 
     @ExceptionHandler(Exception.class)
@@ -139,6 +154,36 @@ public class GlobalExceptionHandler {
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Erro interno. Tente novamente ou contate o suporte",
                 request.getRequestURI() // Oq é esse requestURI, oq retorna?
+        ));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatusException(
+            ResponseStatusException ex,
+            HttpServletRequest request) {
+
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+
+        // Log em nível diferente dependendo da severidade — 429 é
+        // esperado em operação normal, não é um erro do servidor
+        if (status == HttpStatus.TOO_MANY_REQUESTS) {
+            log.warn("Rate limit excedido: path={}", request.getRequestURI());
+        } else {
+            log.warn("ResponseStatusException: status={}, reason={}, path={}",
+                    status, ex.getReason(), request.getRequestURI());
+        }
+
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+
+        // Retry-After ajuda o cliente a saber quando tentar de novo
+        if (status == HttpStatus.TOO_MANY_REQUESTS) {
+            builder.header("Retry-After", "60"); // ajuste pro durationSeconds real
+        }
+
+        return builder.body(ErrorResponse.of(
+                status,
+                ex.getReason() != null ? ex.getReason() : status.getReasonPhrase(),
+                request.getRequestURI()
         ));
     }
 }

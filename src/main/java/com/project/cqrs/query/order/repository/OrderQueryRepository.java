@@ -26,5 +26,8 @@ public interface OrderQueryRepository extends JpaRepository<OrderQueryEntity, Lo
     Page<OrderQueryEntity> findByUserIdOrderByCreatedAtDesc(
             Long userId, Pageable pageable);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from OrderQueryEntity o where o.orderId = :orderId")
+    Optional<OrderQueryEntity> findByOrderIdForUpdate(@Param("orderId") Long orderId);
     boolean existsByOrderId(Long orderId);
 }

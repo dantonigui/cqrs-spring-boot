@@ -21,6 +21,7 @@ public class ProductQueryEntity {
     private BigDecimal productPrice;
     private String productImage;
     private Long  categoryId;
+    private Integer stock = 0;
 
     public ProductQueryEntity() {
     }
@@ -35,7 +36,7 @@ public class ProductQueryEntity {
     }
 
     public static ProductQueryEntity fromCreateEvent(ProductCreateEvent createEvent) {
-        return new ProductQueryEntity(
+        ProductQueryEntity product = new ProductQueryEntity(
                 createEvent.getProductId(),
                 createEvent.getProductName(),
                 createEvent.getProductCode(),
@@ -43,6 +44,8 @@ public class ProductQueryEntity {
                 createEvent.getProductImage(),
                 createEvent.getCategoryId()
         );
+        product.setStock(createEvent.getStock());
+        return product;
     }
 
     public  void applyUpdatedEvent(ProductUpdateEvent updateEvent) {
@@ -52,6 +55,7 @@ public class ProductQueryEntity {
         this.productPrice = updateEvent.getProductPrice();
         this.productImage = updateEvent.getProductImage();
         this.categoryId = updateEvent.getCategoryId();
+        this.stock = updateEvent.getStock();
     }
 
 }

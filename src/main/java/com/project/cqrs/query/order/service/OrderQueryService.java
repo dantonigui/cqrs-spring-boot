@@ -23,7 +23,7 @@ public class OrderQueryService {
     private static final Logger log = LoggerFactory.getLogger(OrderQueryService.class);
 
     public static final String CACHE_ORDERS = "orders";
-    public static final String CACHE_ORDER_DETAIL = "order_detail";
+    public static final String CACHE_ORDER_DETAIL = "order-detail";
 
     private final OrderQueryRepository orderQueryRepository;
     private final PaymentQueryRepository paymentQueryRepository;
@@ -45,14 +45,14 @@ public class OrderQueryService {
     @Cacheable(
             cacheNames = CACHE_ORDERS,
             key = "#userId + '-page' + #pageable.pageNumber "
-            + "+ '-size' + #pageable.pageSize",
-            unless = "#result == null || #result.isEmpty()"
+            + "+ '-size' + #pageable.pageSize + '-sort' + #pageable.sort.toString()",
+            unless = "#result == null || #result.empty()"
     )
-    @Transactional(readOnly = true)
-    public Page<OrderQueryResponseDTO> findByUser(Pageable pageable, Long userId) {
+    @Transactional(transactionManager = "queryTransactionManager", readOnly = true)
+    public com.project.cqrs.shared.dto.PageResponseDTO<OrderQueryResponseDTO> findByUser(Pageable pageable, Long userId) {
         log.debug("Cache MISS - buscando pedidos do userId={} no MySQL", userId);
-        return orderQueryRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
-                .map(OrderQueryResponseDTO::summary);
+        return com.project.cqrs.shared.dto.PageResponseDTO.from(orderQueryRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                .map(OrderQueryResponseDTO::summary));
     }
 
     /**
@@ -65,10 +65,10 @@ public class OrderQueryService {
      */
     @Cacheable(
             cacheNames = CACHE_ORDER_DETAIL,
-            key = "#orderId",
+            key = "#orderId + '-user-' + #userId",
             unless = "#result == null "
     )
-    @Transactional(readOnly = true)
+    @Transactional(transactionManager = "queryTransactionManager", readOnly = true)
     public OrderQueryResponseDTO findByOrderId(Long orderId, Long userId) {
         log.debug("Cache MISS - buscando pedido orderId={} no MySQL", orderId);
 
@@ -89,7 +89,7 @@ public class OrderQueryService {
      * Invalida o cache de um pedido específico.
      * Chamado pelo OrderEventConsumer após atualizar a projeção.
      */
-    @CacheEvict(cacheNames = CACHE_ORDER_DETAIL, key = "#orderId")
+    @CacheEvict(cacheNames = CACHE_ORDER_DETAIL, allEntries = true)
     public void evictOrderCache(Long orderId) {
         log.debug("Cache evicto: order-detail::{}", orderId);
     }

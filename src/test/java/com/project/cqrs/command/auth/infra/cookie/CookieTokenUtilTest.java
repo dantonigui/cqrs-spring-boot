@@ -34,9 +34,9 @@ class CookieTokenUtilTest {
     void setUp() {
         cookieTokenUtil = new CookieTokenUtil();
         ReflectionTestUtils.setField(cookieTokenUtil,
-                "ACCESS_COOKIE_NAME", ACCESS_COOKIE_NAME);
+                "COOKIE_NAME", ACCESS_COOKIE_NAME);
         ReflectionTestUtils.setField(cookieTokenUtil,
-                "ACCESS_COOKIE_MAX_AGE", ACCESS_MAX_AGE);
+                "COOKIE_MAX_AGE", ACCESS_MAX_AGE);
         ReflectionTestUtils.setField(cookieTokenUtil,
                 "REFRESH_COOKIE_NAME", REFRESH_COOKIE_NAME);
         ReflectionTestUtils.setField(cookieTokenUtil,
@@ -122,7 +122,7 @@ class CookieTokenUtilTest {
             String setCookieHeader = response.getHeader("Set-Cookie");
             assertThat(setCookieHeader)
                     .contains(REFRESH_COOKIE_NAME + "=meu-refresh-token");
-            assertThat(setCookieHeader).contains("Path=/auth/refresh");
+            assertThat(setCookieHeader).contains("Path=/");
             assertThat(setCookieHeader).contains("SameSite=Strict");
             assertThat(setCookieHeader).contains("HttpOnly");
         }

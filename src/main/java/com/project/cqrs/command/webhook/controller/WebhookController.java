@@ -31,11 +31,12 @@ public class WebhookController {
             String signature,
 
             @RequestHeader(value = "x-request-id", required = false)
-            String requestId
+            String requestId,
+            @RequestParam(name = "data.id", required = false) String dataId
             ) {
         log.info("Webhook recebido: type={}, requestId={}", body.get("type"), requestId);
 
-        webhookService.processMercadopagoWebhook(body, signature, requestId);
+        webhookService.processMercadopagoWebhook(body, signature, requestId, dataId);
 
         return ResponseEntity.ok().build();
     }

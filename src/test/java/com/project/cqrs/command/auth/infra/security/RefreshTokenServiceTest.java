@@ -1,222 +1,90 @@
 package com.project.cqrs.command.auth.infra.security;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.junit.jupiter.api.*;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
-import java.time.Duration;
-import java.util.Optional;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
-@DisplayName("RefreshTokenService")
+@Testcontainers(disabledWithoutDocker = true)
 class RefreshTokenServiceTest {
+    @Container static final GenericContainer<?> redis = new GenericContainer<>(
+            DockerImageName.parse("redis:7.2-alpine")).withExposedPorts(6379);
+    private LettuceConnectionFactory factory;
+    private RefreshTokenService service;
 
-    @Mock
-    private RedisTemplate<String, Object> redisTemplate;
-
-    @Mock
-    private ValueOperations<String, Object> valueOps;
-
-    private RefreshTokenService refreshTokenService;
-
-    private static final String USER_ID       = "42";
-    private static final long   EXPIRATION_MS = 604800000L; // 7 dias
-
-    @BeforeEach
-    void setUp() {
-        refreshTokenService = new RefreshTokenService(redisTemplate, EXPIRATION_MS);
+    @BeforeEach void setup() {
+        factory = new LettuceConnectionFactory(redis.getHost(), redis.getMappedPort(6379));
+        factory.afterPropertiesSet();
+        var template = new StringRedisTemplate(factory);
+        template.afterPropertiesSet();
+        service = new RefreshTokenService(template, 60_000);
     }
+    @AfterEach void cleanup() { factory.destroy(); }
 
-    // ── generate ──────────────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("generate()")
-    class Generate {
-
-        @Test
-        @DisplayName("deve retornar um token UUID não nulo")
-        void shouldReturnNonNullToken() {
-            when(redisTemplate.opsForValue()).thenReturn(valueOps);
-            String token = refreshTokenService.generate(USER_ID);
-            assertThat(token).isNotNull().isNotBlank();
-        }
-
-        @Test
-        @DisplayName("deve armazenar o token no Redis com o userId como valor")
-        void shouldStoreTokenInRedisWithUserId() {
-            when(redisTemplate.opsForValue()).thenReturn(valueOps);
-            String token = refreshTokenService.generate(USER_ID);
-
-            ArgumentCaptor<String> keyCaptor   = ArgumentCaptor.forClass(String.class);
-            ArgumentCaptor<Object> valueCaptor = ArgumentCaptor.forClass(Object.class);
-            ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.forClass(Duration.class);
-
-            verify(valueOps).set(keyCaptor.capture(), valueCaptor.capture(),
-                    ttlCaptor.capture());
-
-            assertThat(keyCaptor.getValue()).isEqualTo("refresh_token:" + token);
-            assertThat(valueCaptor.getValue()).isEqualTo(USER_ID);
-            assertThat(ttlCaptor.getValue()).isEqualTo(Duration.ofMillis(EXPIRATION_MS));
-        }
-
-        @Test
-        @DisplayName("deve gerar tokens diferentes a cada chamada")
-        void shouldGenerateUniqueTokens() {
-            when(redisTemplate.opsForValue()).thenReturn(valueOps);
-            String token1 = refreshTokenService.generate(USER_ID);
-            String token2 = refreshTokenService.generate(USER_ID);
-            assertThat(token1).isNotEqualTo(token2);
+    @Test void onlyOneConcurrentRotationCanConsumeTheSameToken() throws Exception {
+        var session = service.start("42");
+        try (var pool = Executors.newFixedThreadPool(8)) {
+            var ready = new CountDownLatch(8);
+            var go = new CountDownLatch(1);
+            var attempts = new ArrayList<Future<java.util.Optional<RefreshTokenService.SessionTokens>>>();
+            for (int i = 0; i < 8; i++) attempts.add(pool.submit(() -> {
+                ready.countDown();
+                if (!go.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("Start timeout");
+                return service.rotate(session.refreshToken());
+            }));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            var winners = new ArrayList<RefreshTokenService.SessionTokens>();
+            for (var attempt : attempts) attempt.get(10, TimeUnit.SECONDS).ifPresent(winners::add);
+            assertThat(winners).hasSize(1);
+            assertThat(winners.getFirst().sessionId()).isEqualTo(session.sessionId());
+            assertThat(service.lookup(session.refreshToken())).isEmpty();
+            assertThat(service.lookup(winners.getFirst().refreshToken())).contains(winners.getFirst());
+            assertThat(service.isSessionActive(session.sessionId(), "42")).isTrue();
         }
     }
 
-    // ── validate ──────────────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("validate()")
-    class Validate {
-
-        @Test
-        @DisplayName("deve retornar userId quando token existe no Redis")
-        void shouldReturnUserIdWhenTokenExists() {
-            when(redisTemplate.opsForValue()).thenReturn(valueOps);
-            String token = "valid-token-uuid";
-            when(valueOps.get("refresh_token:" + token)).thenReturn(USER_ID);
-
-            Optional<String> result = refreshTokenService.validate(token);
-
-            assertThat(result).isPresent().contains(USER_ID);
-        }
-
-        @Test
-        @DisplayName("deve retornar Optional vazio quando token não existe")
-        void shouldReturnEmptyWhenTokenNotFound() {
-            when(redisTemplate.opsForValue()).thenReturn(valueOps);
-            when(valueOps.get(anyString())).thenReturn(null);
-
-            Optional<String> result = refreshTokenService.validate("token-inexistente");
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        @DisplayName("deve retornar Optional vazio quando token é null")
-        void shouldReturnEmptyWhenTokenIsNull() {
-
-            Optional<String> result = refreshTokenService.validate(null);
-
-            assertThat(result).isEmpty();
-            verifyNoInteractions(valueOps);
-        }
-
-        @Test
-        @DisplayName("deve retornar Optional vazio quando token é blank")
-        void shouldReturnEmptyWhenTokenIsBlank() {
-            Optional<String> result = refreshTokenService.validate("   ");
-            assertThat(result).isEmpty();
-        }
+    @Test void logoutRevokesAccessAndTheLatestRotatedRefreshOnlyForItsSession() {
+        var first = service.start("42");
+        var second = service.start("42");
+        var rotated = service.rotate(first.refreshToken()).orElseThrow();
+        service.revokeSession(first.sessionId(), "42");
+        assertThat(service.isSessionActive(first.sessionId(), "42")).isFalse();
+        assertThat(service.lookup(rotated.refreshToken())).isEmpty();
+        assertThat(service.rotate(rotated.refreshToken())).isEmpty();
+        assertThat(service.isSessionActive(second.sessionId(), "42")).isTrue();
     }
 
-    // ── revoke ────────────────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("revoke()")
-    class Revoke {
-
-        @Test
-        @DisplayName("deve deletar a chave do Redis")
-        void shouldDeleteKeyFromRedis() {
-            String token = "token-to-revoke";
-            when(redisTemplate.delete("refresh_token:" + token)).thenReturn(true);
-
-            refreshTokenService.revoke(token);
-
-            verify(redisTemplate).delete("refresh_token:" + token);
-        }
-
-        @Test
-        @DisplayName("não deve chamar Redis quando token é null")
-        void shouldNotCallRedisWhenTokenIsNull() {
-            refreshTokenService.revoke(null);
-            verify(redisTemplate, never()).delete(anyString());
-        }
+    @Test void logoutAllRevokesEverySessionAndPreservesOtherUsersAndFutureLogins() {
+        var first = service.start("42");
+        var second = service.start("42");
+        var other = service.start("43");
+        service.rotate(first.refreshToken());
+        service.revokeAll("42");
+        assertThat(service.isSessionActive(first.sessionId(), "42")).isFalse();
+        assertThat(service.isSessionActive(second.sessionId(), "42")).isFalse();
+        assertThat(service.rotate(second.refreshToken())).isEmpty();
+        assertThat(service.isSessionActive(other.sessionId(), "43")).isTrue();
+        var fresh = service.start("42");
+        assertThat(service.isSessionActive(fresh.sessionId(), "42")).isTrue();
     }
 
-    // ── rotate ────────────────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("rotate()")
-    class Rotate {
-
-        @Test
-        @DisplayName("deve revogar o token antigo e gerar um novo")
-        void shouldRevokeOldAndGenerateNew() {
-            String oldToken = "old-token";
-            when(redisTemplate.delete("refresh_token:" + oldToken)).thenReturn(true);
-            when(redisTemplate.opsForValue()).thenReturn(valueOps);
-            String newToken = refreshTokenService.rotate(oldToken, USER_ID);
-
-            // Revogou o antigo
-            verify(redisTemplate).delete("refresh_token:" + oldToken);
-            // Gerou o novo
-            assertThat(newToken).isNotNull().isNotEqualTo(oldToken);
-            // Armazenou o novo no Redis
-            verify(valueOps).set(eq("refresh_token:" + newToken),
-                    eq(USER_ID), any(Duration.class));
-        }
-    }
-
-    // ── revokeAll ─────────────────────────────────────────────────────────────
-
-    @Nested
-    @DisplayName("revokeAll()")
-    class RevokeAll {
-
-        @Test
-        @DisplayName("deve deletar apenas as chaves que pertencem ao userId")
-        void shouldDeleteOnlyKeysForUserId() {
-            when(redisTemplate.opsForValue()).thenReturn(valueOps);
-            String tokenA = "token-a";
-            String tokenB = "token-b";
-            String tokenC = "token-c-outro-usuario";
-
-            when(redisTemplate.keys("refresh_token:*")).thenReturn(
-                    Set.of("refresh_token:" + tokenA,
-                            "refresh_token:" + tokenB,
-                            "refresh_token:" + tokenC));
-
-            when(valueOps.get("refresh_token:" + tokenA)).thenReturn(USER_ID);
-            when(valueOps.get("refresh_token:" + tokenB)).thenReturn(USER_ID);
-            when(valueOps.get("refresh_token:" + tokenC)).thenReturn("outro-user");
-
-            when(redisTemplate.delete("refresh_token:" + tokenA)).thenReturn(true);
-            when(redisTemplate.delete("refresh_token:" + tokenB)).thenReturn(true);
-
-            refreshTokenService.revokeAll(USER_ID);
-
-            verify(redisTemplate).delete("refresh_token:" + tokenA);
-            verify(redisTemplate).delete("refresh_token:" + tokenB);
-            verify(redisTemplate, never()).delete("refresh_token:" + tokenC);
-        }
-
-        @Test
-        @DisplayName("não deve lançar exceção quando não há tokens")
-        void shouldNotThrowWhenNoTokensExist() {
-            when(redisTemplate.keys("refresh_token:*")).thenReturn(Set.of());
-            // Não lança exceção
-            refreshTokenService.revokeAll(USER_ID);
-        }
+    @Test void anotherUserCannotRevokeOrAuthenticateUsingTheSession() {
+        var session = service.start("42");
+        service.revokeSession(session.sessionId(), "43");
+        assertThat(service.isSessionActive(session.sessionId(), "43")).isFalse();
+        assertThat(service.isSessionActive(session.sessionId(), "42")).isTrue();
+        assertThat(service.lookup("unknown")).isEmpty();
+        assertThat(service.rotate("unknown")).isEmpty();
+        assertThat(service.lookup(null)).isEmpty();
+        assertThat(service.isSessionActive(null, "42")).isFalse();
     }
 }

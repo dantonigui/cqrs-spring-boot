@@ -19,13 +19,13 @@ public class CategoryQueryService {
         this.categoryQueryRepository = categoryQueryRepository;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(transactionManager = "queryTransactionManager", readOnly = true)
     public Page<CategoryQueryDTO> findAllCategories(Pageable  pageable) {
         return categoryQueryRepository.findByOrderByCategoryNameAsc(pageable)
                 .map(CategoryQueryDTO::from);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(transactionManager = "queryTransactionManager", readOnly = true)
     public CategoryQueryDTO findById(Long id) {
         return categoryQueryRepository.findById(id).map(CategoryQueryDTO::from)
                 .orElseThrow(() -> new ResourceNotFoundException("Category with id " + id + " not found"));

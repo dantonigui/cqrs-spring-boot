@@ -13,6 +13,14 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/command/products")
 public class ProductCommandController {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.project.cqrs.command.product.service.InventoryService inventory;
+    public record StockRequest(@jakarta.validation.constraints.Positive int quantity) {}
+    @PostMapping("/{id}/stock")
+    public ResponseEntity<Void> replenish(@PathVariable Long id, @Valid @RequestBody StockRequest request) {
+        inventory.replenish(id, request.quantity());
+        return ResponseEntity.noContent().build();
+    }
     private final ProductCommandService productCommandService;
     public ProductCommandController(ProductCommandService productCommandService) {
         this.productCommandService = productCommandService;

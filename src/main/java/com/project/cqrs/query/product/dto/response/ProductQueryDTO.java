@@ -11,7 +11,8 @@ public record ProductQueryDTO(
         String productCode,
         BigDecimal productPrice,
         String productImage,
-        Long categoryId
+        Long categoryId,
+        Integer stock
 ) implements Serializable {
     public static ProductQueryDTO from (ProductQueryEntity productEntity) {
         return new ProductQueryDTO(
@@ -20,7 +21,8 @@ public record ProductQueryDTO(
                 productEntity.getProductCode(),
                 productEntity.getProductPrice(),
                 productEntity.getProductImage(),
-                productEntity.getCategoryId()
+                productEntity.getCategoryId(),
+                productEntity.getStock()
         );
     }
 }

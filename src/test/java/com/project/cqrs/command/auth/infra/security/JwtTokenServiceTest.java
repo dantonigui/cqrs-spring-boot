@@ -55,21 +55,21 @@ class JwtTokenServiceTest {
         @Test
         @DisplayName("deve gerar um token não nulo e não vazio")
         void shouldGenerateNonEmptyToken() {
-            String token = jwtTokenService.generateToken(buildUserDto());
+            String token = jwtTokenService.generateToken(buildUserDto(), "test-session");
             assertThat(token).isNotNull().isNotBlank();
         }
 
         @Test
         @DisplayName("token gerado deve ter 3 partes separadas por ponto (header.payload.signature)")
         void shouldHaveThreeParts() {
-            String token = jwtTokenService.generateToken(buildUserDto());
+            String token = jwtTokenService.generateToken(buildUserDto(), "test-session");
             assertThat(token.split("\\.")).hasSize(3);
         }
 
         @Test
         @DisplayName("deve incluir userId como subject")
         void shouldIncludeUserIdAsSubject() {
-            String token = jwtTokenService.generateToken(buildUserDto());
+            String token = jwtTokenService.generateToken(buildUserDto(), "test-session");
 
             Claims claims = parseWithoutValidation(token);
             assertThat(claims.getSubject()).isEqualTo(USER_ID.toString());
@@ -78,7 +78,7 @@ class JwtTokenServiceTest {
         @Test
         @DisplayName("deve incluir email e role como claims customizados")
         void shouldIncludeEmailAndRoleClaims() {
-            String token = jwtTokenService.generateToken(buildUserDto());
+            String token = jwtTokenService.generateToken(buildUserDto(), "test-session");
 
             Claims claims = parseWithoutValidation(token);
             assertThat(claims.get(JwtTokenService.CLAIM_EMAIL)).isEqualTo(USER_EMAIL);
@@ -88,7 +88,7 @@ class JwtTokenServiceTest {
         @Test
         @DisplayName("deve definir expiração no futuro, respeitando o TTL configurado")
         void shouldSetExpirationInFuture() {
-            String token = jwtTokenService.generateToken(buildUserDto());
+            String token = jwtTokenService.generateToken(buildUserDto(), "test-session");
 
             Claims claims = parseWithoutValidation(token);
             long expiresInMs = claims.getExpiration().getTime()
@@ -113,7 +113,7 @@ class JwtTokenServiceTest {
         @Test
         @DisplayName("deve retornar Optional presente para token recém-gerado")
         void shouldReturnPresentForFreshToken() {
-            String token = jwtTokenService.generateToken(buildUserDto());
+            String token = jwtTokenService.generateToken(buildUserDto(), "test-session");
 
             Optional<Claims> result = jwtTokenService.parseToken(token);
 
@@ -123,7 +123,7 @@ class JwtTokenServiceTest {
         @Test
         @DisplayName("claims retornados devem bater com os dados originais")
         void claimsShouldMatchOriginalData() {
-            String token = jwtTokenService.generateToken(buildUserDto());
+            String token = jwtTokenService.generateToken(buildUserDto(), "test-session");
 
             Claims claims = jwtTokenService.parseToken(token).orElseThrow();
 
@@ -198,7 +198,7 @@ class JwtTokenServiceTest {
             JwtTokenService expiredTokenService =
                     new JwtTokenService(SECRET, -1000L);
 
-            String expiredToken = expiredTokenService.generateToken(buildUserDto());
+            String expiredToken = expiredTokenService.generateToken(buildUserDto(), "test-session");
 
             assertThat(jwtTokenService.parseToken(expiredToken)).isEmpty();
         }

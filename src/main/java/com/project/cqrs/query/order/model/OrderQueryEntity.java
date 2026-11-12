@@ -70,6 +70,8 @@ public class OrderQueryEntity {
     // ── Mutações de status ────────────────────────────────────────────────────
 
     public void updateStatus(OrderStatus newStatus) {
+        if (this.status == OrderStatus.CANCELLED) return;
+        if (this.status == OrderStatus.PAID && newStatus != OrderStatus.CANCELLED) return;
         this.status = newStatus;
         this.updatedAt = LocalDateTime.now();
     }

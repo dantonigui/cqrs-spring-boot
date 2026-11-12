@@ -37,6 +37,7 @@ public class PaymentCommandEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
+    @Builder.Default
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
     @Column(name = "mp_payment_id", length = 100)
@@ -46,6 +47,7 @@ public class PaymentCommandEntity {
     private BigDecimal transactionAmount;
 
     @Column(nullable = false)
+    @Builder.Default
     private Integer installments = 1;
 
     // Presencial
@@ -70,9 +72,11 @@ public class PaymentCommandEntity {
     private String cardBrand;
 
     @Column(name = "created_at", updatable = false)
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(name = "updated_at")
+    @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     @PreUpdate

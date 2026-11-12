@@ -23,9 +23,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
 @EnableJpaRepositories(
-        basePackages = {"com.project.cqrs.command",
-                        "com.project.cqrs.admin.idempotency.repository"
-        },
+        basePackages = "com.project.cqrs.command",
         entityManagerFactoryRef = "commandEntityManagerFactory",
         transactionManagerRef = "commandTransactionManager"
 )
@@ -41,6 +39,7 @@ public class CommandDatabaseConfig {
 
     @Bean
     @Primary
+    @ConfigurationProperties("spring.datasource.command.hikari")
     public DataSource commandDataSource(
             @Qualifier("commandDataSourceProperties")
             DataSourceProperties properties) {
@@ -54,6 +53,7 @@ public class CommandDatabaseConfig {
 
     @Bean
     @Primary
+    @org.springframework.context.annotation.DependsOn("commandFlyway")
     public LocalContainerEntityManagerFactoryBean commandEntityManagerFactory(
             EntityManagerFactoryBuilder builder,
             @Qualifier("commandDataSource")
@@ -62,7 +62,7 @@ public class CommandDatabaseConfig {
 
         return builder
                 .dataSource(dataSource)
-                .packages("com.project.cqrs.command","com.project.cqrs.admin.idempotency.entity")
+                .packages("com.project.cqrs.command")
                 .persistenceUnit("command")
                 .build();
     }

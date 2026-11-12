@@ -42,17 +42,17 @@ class DlqServiceTest {
         @Test
         @DisplayName("deve somar as contagens dos três topics DLQ conhecidos")
         void shouldSumCountsAcrossAllKnownTopics() {
-            when(dlqInspector.countMessages("product.created.DLT")).thenReturn(2L);
-            when(dlqInspector.countMessages("product.updated.DLT")).thenReturn(0L);
-            when(dlqInspector.countMessages("product.deleted.DLT")).thenReturn(3L);
+            when(dlqInspector.countMessages("products-created.DLT")).thenReturn(2L);
+            when(dlqInspector.countMessages("products-updated.DLT")).thenReturn(0L);
+            when(dlqInspector.countMessages("products-deleted.DLT")).thenReturn(3L);
 
             DlqStatsResponse result = dlqService.stats();
 
             assertThat(result.totalPending()).isEqualTo(5L);
             assertThat(result.dlqCounts())
-                    .containsEntry("product.created.DLT", 2L)
-                    .containsEntry("product.updated.DLT", 0L)
-                    .containsEntry("product.deleted.DLT", 3L);
+                    .containsEntry("products-created.DLT", 2L)
+                    .containsEntry("products-updated.DLT", 0L)
+                    .containsEntry("products-deleted.DLT", 3L);
         }
 
         @Test
@@ -83,7 +83,7 @@ class DlqServiceTest {
 
             dlqService.stats();
 
-            verify(dlqInspector, times(3)).countMessages(anyString());
+            verify(dlqInspector, times(13)).countMessages(anyString());
         }
     }
 
@@ -96,24 +96,24 @@ class DlqServiceTest {
         @Test
         @DisplayName("deve adicionar sufixo .DLT quando o topic não o possui")
         void shouldAppendDltSuffixWhenMissing() {
-            when(dlqInspector.peek("product.created.DLT", 10))
+            when(dlqInspector.peek("products-created.DLT", 10))
                     .thenReturn(List.of());
 
-            dlqService.peek("product.created", 10);
+            dlqService.peek("products-created", 10);
 
-            verify(dlqInspector).peek("product.created.DLT", 10);
+            verify(dlqInspector).peek("products-created.DLT", 10);
         }
 
         @Test
         @DisplayName("não deve duplicar o sufixo quando o topic já termina em .DLT")
         void shouldNotDuplicateSuffixWhenAlreadyPresent() {
-            when(dlqInspector.peek("product.created.DLT", 5))
+            when(dlqInspector.peek("products-created.DLT", 5))
                     .thenReturn(List.of());
 
-            dlqService.peek("product.created.DLT", 5);
+            dlqService.peek("products-created.DLT", 5);
 
-            verify(dlqInspector).peek("product.created.DLT", 5);
-            verify(dlqInspector, never()).peek("product.created.DLT.DLT", 5);
+            verify(dlqInspector).peek("products-created.DLT", 5);
+            verify(dlqInspector, never()).peek("products-created.DLT.DLT", 5);
         }
 
         @Test
@@ -130,16 +130,16 @@ class DlqServiceTest {
         @DisplayName("deve retornar count igual ao tamanho da lista de mensagens")
         void shouldReturnCountMatchingMessageListSize() {
             List<DlqMessageResponse> messages = List.of(
-                    new DlqMessageResponse("product.created.DLT", 0, 10L, "k1", "v1"),
-                    new DlqMessageResponse("product.created.DLT", 0, 11L, "k2", "v2")
+                    new DlqMessageResponse("products-created.DLT", 0, 10L, "k1", "v1"),
+                    new DlqMessageResponse("products-created.DLT", 0, 11L, "k2", "v2")
             );
-            when(dlqInspector.peek("product.created.DLT", 10)).thenReturn(messages);
+            when(dlqInspector.peek("products-created.DLT", 10)).thenReturn(messages);
 
-            DlqPeekResponse result = dlqService.peek("product.created", 10);
+            DlqPeekResponse result = dlqService.peek("products-created", 10);
 
             assertThat(result.count()).isEqualTo(2);
             assertThat(result.messages()).isEqualTo(messages);
-            assertThat(result.dlqTopic()).isEqualTo("product.created.DLT");
+            assertThat(result.dlqTopic()).isEqualTo("products-created.DLT");
         }
     }
 
@@ -161,19 +161,19 @@ class DlqServiceTest {
         @Test
         @DisplayName("deve calcular originalTopic removendo o sufixo .DLT")
         void shouldComputeOriginalTopicByStrippingSuffix() {
-            when(dlqReplayService.replay("product.created.DLT")).thenReturn(0);
+            when(dlqReplayService.replay("products-created.DLT")).thenReturn(0);
 
-            DlqReplayResponse result = dlqService.replay("product.created.DLT");
+            DlqReplayResponse result = dlqService.replay("products-created.DLT");
 
-            assertThat(result.originalTopic()).isEqualTo("product.created");
+            assertThat(result.originalTopic()).isEqualTo("products-created");
         }
 
         @Test
         @DisplayName("deve retornar mensagem de sucesso quando replayed > 0")
         void shouldReturnSuccessMessageWhenReplayedGreaterThanZero() {
-            when(dlqReplayService.replay("product.created.DLT")).thenReturn(4);
+            when(dlqReplayService.replay("products-created.DLT")).thenReturn(4);
 
-            DlqReplayResponse result = dlqService.replay("product.created");
+            DlqReplayResponse result = dlqService.replay("products-created");
 
             assertThat(result.replayed()).isEqualTo(4);
             assertThat(result.message()).contains("reenviadas");
@@ -182,9 +182,9 @@ class DlqServiceTest {
         @Test
         @DisplayName("deve retornar mensagem de vazio quando replayed == 0")
         void shouldReturnEmptyMessageWhenReplayedIsZero() {
-            when(dlqReplayService.replay("product.created.DLT")).thenReturn(0);
+            when(dlqReplayService.replay("products-created.DLT")).thenReturn(0);
 
-            DlqReplayResponse result = dlqService.replay("product.created");
+            DlqReplayResponse result = dlqService.replay("products-created");
 
             assertThat(result.replayed()).isZero();
             assertThat(result.message()).contains("Nenhuma mensagem");
@@ -193,11 +193,11 @@ class DlqServiceTest {
         @Test
         @DisplayName("deve delegar ao DlqReplayService com o topic já normalizado (.DLT)")
         void shouldDelegateWithNormalizedTopic() {
-            when(dlqReplayService.replay("product.updated.DLT")).thenReturn(1);
+            when(dlqReplayService.replay("products-updated.DLT")).thenReturn(1);
 
-            dlqService.replay("product.updated");
+            dlqService.replay("products-updated");
 
-            verify(dlqReplayService).replay("product.updated.DLT");
+            verify(dlqReplayService).replay("products-updated.DLT");
         }
     }
 }

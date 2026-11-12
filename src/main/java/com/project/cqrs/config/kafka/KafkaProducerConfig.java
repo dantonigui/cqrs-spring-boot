@@ -120,6 +120,7 @@ public class KafkaProducerConfig {
 
 
     @Bean
+    @org.springframework.context.annotation.Primary
     public KafkaTemplate<String,Object> kafkaTemplate(
             ProducerFactory<String,Object> producerFactory
     ){
@@ -127,4 +128,14 @@ public class KafkaProducerConfig {
         return new KafkaTemplate<>(producerFactory);
     }
 
+    @Bean("dlqReplayKafkaTemplate")
+    public KafkaTemplate<String, Object> dlqReplayKafkaTemplate() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        config.put(ProducerConfig.ACKS_CONFIG, "all");
+        config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(config));
+    }
 }

@@ -53,11 +53,10 @@ public class OrderCommandController {
             """
     )
     @PostMapping
-    public ResponseEntity<Void> createOrder(@Valid @RequestBody CreateOrderRequestDTO dto,
+    public ResponseEntity<Map<String, Long>> createOrder(@Valid @RequestBody CreateOrderRequestDTO dto,
                                                         @AuthenticationPrincipal String userId) {
-        orderCommandService.createOrder(Long.parseLong(userId), dto);
-        //Tirei OrderResponseDTO e troquei para void aqui e no service por causa da arquitetura de eventos, confirir isso ao fazer testes.
-        return ResponseEntity.ok().build();
+        Long orderId = orderCommandService.createOrder(Long.parseLong(userId), dto);
+        return ResponseEntity.created(java.net.URI.create("/api/v1/query/orders/" + orderId)).body(Map.of("orderId", orderId));
     }
 
     // ---------------- CHECKOUT CARTÃO ------------------
@@ -79,8 +78,8 @@ public class OrderCommandController {
     )
     @PostMapping("/{orderId}/checkout/card")
     public ResponseEntity<CardPaymentResponseDTO> checkoutCard(@Parameter(description = "ID do pedido")
-                                                               @PathVariable Long orderId, @Valid @RequestBody CardCheckoutRequestDTO dto) {
-            return ResponseEntity.ok(paymentService.createCardPayment(orderId, dto));
+                                                               @PathVariable Long orderId, @AuthenticationPrincipal String userId, @Valid @RequestBody CardCheckoutRequestDTO dto) {
+            return ResponseEntity.ok(paymentService.createCardPayment(orderId, Long.parseLong(userId), dto));
     }
 
     // --------------- CHECKOUT PIX ------------------
@@ -101,8 +100,8 @@ public class OrderCommandController {
     )
     @PostMapping("/{orderId}/checkout/pix")
     public ResponseEntity<PixPaymentResponseDTO> checkoutPix(@Parameter(description = "ID do pedido")
-                                                                 @PathVariable Long orderId, @Valid @RequestBody PixCheckoutRequestDTO dto) {
-        return ResponseEntity.ok(paymentService.createPixPayment(orderId, dto));
+                                                                 @PathVariable Long orderId, @AuthenticationPrincipal String userId, @Valid @RequestBody PixCheckoutRequestDTO dto) {
+        return ResponseEntity.ok(paymentService.createPixPayment(orderId, Long.parseLong(userId), dto));
     }
 
     // -------------- CHECKOUT PRESENCIAL ---------------

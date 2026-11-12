@@ -1,51 +1,33 @@
 package com.project.cqrs.command.payment.service;
-
 import com.project.cqrs.command.order.repository.OrderCommandRepository;
 import com.project.cqrs.command.payment.kafka.producer.PaymentEventProducer;
 import com.project.cqrs.command.payment.model.PaymentCommandEntity;
+import com.project.cqrs.shared.enums.*;
 import com.project.cqrs.shared.event.payment.PaymentApprovedEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.project.cqrs.config.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PaymentApprovalService {
-
-    private static final Logger log = LoggerFactory.getLogger(PaymentApprovalService.class);
-
-    private final OrderCommandRepository orderCommandRepository;
-    private final PaymentEventProducer paymentEventProducer;
-
-    public PaymentApprovalService(OrderCommandRepository orderCommandRepository, PaymentEventProducer paymentEventProducer) {
-        this.orderCommandRepository = orderCommandRepository;
-        this.paymentEventProducer = paymentEventProducer;
+    private final OrderCommandRepository orders;
+    private final PaymentEventProducer events;
+    private final PaymentGateway gateway;
+    public PaymentApprovalService(OrderCommandRepository orders, PaymentEventProducer events, PaymentGateway gateway) {
+        this.orders = orders; this.events = events; this.gateway = gateway;
     }
-
-    @Transactional
+    @Transactional("commandTransactionManager")
     public void approve(PaymentCommandEntity payment, String mpPaymentId) {
-        orderCommandRepository.findByIdForUpdate(payment.getOrder().getOrderId()).ifPresent(order -> {
-
-            if(order.getStatus().name().equals("PAID")) {
-                return;
-            }
-
-            order.markAsPaid();
-
-            orderCommandRepository.save(order);
-
-            PaymentApprovedEvent event = PaymentApprovedEvent.of(
-                    mpPaymentId,
-                    payment.getId(),
-                    order.getOrderId(),
-                    order.getUserId(),
-                    payment.getTransactionAmount(),
-                    payment.getPaymentMethod()
-            );
-
-            paymentEventProducer.publishPaymentApproved(order.getOrderId().toString(), event);
-
-            log.info("Payment approved for payment with id " + order.getOrderId());
-        });
+        var order = orders.findByIdForUpdate(payment.getOrder().getOrderId()).orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado"));
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            if (mpPaymentId != null) gateway.refund(mpPaymentId);
+            payment.setPaymentStatus(PaymentStatus.REFUNDED);
+            return;
+        }
+        if (order.getStatus() == OrderStatus.PAID) return;
+        payment.setPaymentStatus(PaymentStatus.APPROVED);
+        order.markAsPaid();
+        orders.save(order);
+        events.publishPaymentApproved(order.getOrderId().toString(), PaymentApprovedEvent.from(payment));
     }
 }

@@ -49,6 +49,7 @@ class DlqReplayGatewayTest {
     @BeforeEach
     void setUp() {
         gateway = new DlqReplayGateway(consumerFactory, kafkaTemplate);
+        lenient().when(kafkaTemplate.send(any(org.apache.kafka.clients.producer.ProducerRecord.class))).thenReturn(java.util.concurrent.CompletableFuture.completedFuture(null));
         when(consumerFactory.create()).thenReturn(consumer);
         when(consumer.partitionsFor(SOURCE_TOPIC)).thenReturn(
                 List.of(new PartitionInfo(SOURCE_TOPIC, 0, null, null, null)));
@@ -78,8 +79,12 @@ class DlqReplayGatewayTest {
 
         gateway.replayMessages(SOURCE_TOPIC, DESTINATION_TOPIC);
 
-        verify(kafkaTemplate).send(DESTINATION_TOPIC, "key-1", "value-1");
-        verify(kafkaTemplate).send(DESTINATION_TOPIC, "key-2", "value-2");
+        ArgumentCaptor<org.apache.kafka.clients.producer.ProducerRecord<String, Object>> sent =
+                ArgumentCaptor.forClass(org.apache.kafka.clients.producer.ProducerRecord.class);
+        verify(kafkaTemplate, times(2)).send(sent.capture());
+        assertThat(sent.getAllValues()).extracting(r -> r.topic()).containsOnly(DESTINATION_TOPIC);
+        assertThat(sent.getAllValues()).extracting(r -> r.key()).containsExactly("key-1", "key-2");
+        assertThat(sent.getAllValues()).extracting(r -> r.value()).containsExactly("value-1", "value-2");
     }
 
     @Test
@@ -145,6 +150,31 @@ class DlqReplayGatewayTest {
 
         gateway.replayMessages(SOURCE_TOPIC, DESTINATION_TOPIC);
 
+        verify(consumer).close();
+    }
+
+    @Test
+    void preservesRawJsonAndTypeHeader() {
+        var record = new ConsumerRecord<>(SOURCE_TOPIC, 0, 0L, "42", "{\"orderId\":42}");
+        byte[] type = "orderCreated".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        record.headers().add("__TypeId__", type);
+        when(consumer.poll(any(Duration.class))).thenReturn(recordsWith(record)).thenReturn(emptyRecords());
+        gateway.replayMessages(SOURCE_TOPIC, DESTINATION_TOPIC);
+        ArgumentCaptor<org.apache.kafka.clients.producer.ProducerRecord<String, Object>> sent =
+                ArgumentCaptor.forClass(org.apache.kafka.clients.producer.ProducerRecord.class);
+        verify(kafkaTemplate).send(sent.capture());
+        assertThat(sent.getValue().value()).isEqualTo(record.value());
+        assertThat(sent.getValue().headers().lastHeader("__TypeId__").value()).isEqualTo(type);
+    }
+
+    @Test
+    void failedBrokerAcknowledgementFailsReplay() {
+        var record = new ConsumerRecord<>(SOURCE_TOPIC, 0, 0L, "42", "{}");
+        when(consumer.poll(any(Duration.class))).thenReturn(recordsWith(record));
+        when(kafkaTemplate.send(any(org.apache.kafka.clients.producer.ProducerRecord.class)))
+                .thenReturn(java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("broker unavailable")));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> gateway.replayMessages(SOURCE_TOPIC, DESTINATION_TOPIC))
+                .isInstanceOf(IllegalStateException.class).hasMessage("Kafka não confirmou o replay");
         verify(consumer).close();
     }
 }

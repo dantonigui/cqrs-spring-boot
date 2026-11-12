@@ -30,6 +30,7 @@ public class OAuth2AuthSucessHandler extends SimpleUrlAuthenticationSuccessHandl
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
 
+    public void setFrontendUrl(String value) { this.frontendUrl = value; }
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {
         var oAuth2User = (DefaultOAuth2User) authentication.getPrincipal();
@@ -40,10 +41,11 @@ public class OAuth2AuthSucessHandler extends SimpleUrlAuthenticationSuccessHandl
 
         UserRequestDTO userDto = UserRequestDTO.from(userCommandEntity);
 
-        String accessToken = jwtTokenService.generateToken(userDto);
+        var session = refreshTokenService.start(userCommandEntity.getUserId().toString());
+        String accessToken = jwtTokenService.generateToken(userDto, session.sessionId());
         cookieTokenUtil.writeToken(response,accessToken);
 
-        String refreshToken = refreshTokenService.generate(userCommandEntity.getUserId().toString());
+        String refreshToken = session.refreshToken();
         cookieTokenUtil.writeRefreshToken(response, refreshToken);
 
         getRedirectStrategy().sendRedirect(request, response, frontendUrl + "/");

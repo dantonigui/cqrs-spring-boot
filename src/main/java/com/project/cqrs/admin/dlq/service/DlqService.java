@@ -15,10 +15,10 @@ import java.util.Map;
 public class DlqService {
 
     private static final List<String> DLQ_TOPICS = List.of(
-            "product.created.DLT",
-            "product.updated.DLT",
-            "product.deleted.DLT"
-    );
+            "products-created.DLT", "products-updated.DLT", "products-deleted.DLT",
+            "category-created.DLT", "category-updated.DLT", "category-deleted.DLT",
+            "order-created.DLT", "order-updated.DLT", "order-deleted.DLT",
+            "user-created.DLT", "user-updated.DLT", "user-logout.DLT", "payment_Approved.DLT");
 
     private final DlqInspector dlqInspector;
     private final DlqReplayService dlqReplayService;

@@ -37,22 +37,25 @@ public class MercadoPagoPaymentService {
 
     private final OrderCommandRepository orderCommandRepository;
     private final PaymentCommandRepository paymentCommandRepository;
+    private final PaymentApprovalService approvals;
 
     @Value("${app.base-url}")
     private String baseUrl;
 
-    public MercadoPagoPaymentService(OrderCommandRepository orderCommandRepository, PaymentCommandRepository paymentCommandRepository) {
+    public MercadoPagoPaymentService(OrderCommandRepository orderCommandRepository, PaymentCommandRepository paymentCommandRepository, PaymentApprovalService approvals) {
             this.orderCommandRepository = orderCommandRepository;
             this.paymentCommandRepository = paymentCommandRepository;
+            this.approvals = approvals;
     }
 
-    @Transactional
-    public PixPaymentResponseDTO createPixPayment(Long orderId, PixCheckoutRequestDTO pixCheckoutRequestDTO) {
+    @Transactional("commandTransactionManager")
+    public PixPaymentResponseDTO createPixPayment(Long orderId, Long userId, PixCheckoutRequestDTO pixCheckoutRequestDTO) {
 
         // GUARDA 1: lock pessimista - elimina race condition
         OrderCommandEntity orderCommandEntity = orderCommandRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
 
+        assertOwner(orderCommandEntity, userId);
         // GUARDA 2: status da ordem
         if (orderCommandEntity.getStatus() == OrderStatus.PAID) {
             throw new PaymentException("Pedido #" + orderId + " já foi pago.");
@@ -62,6 +65,9 @@ public class MercadoPagoPaymentService {
             throw new PaymentException("Pedido #" + orderId + " está cancelado.");
         }
 
+        if (orderCommandRepository.hasActivePayment(orderId) && paymentCommandRepository.findPendingPixByOrderId(orderId).isEmpty()) {
+            throw new PaymentException("Pedido já possui outro pagamento em andamento");
+        }
         // GUARDA 3: PIX pendente existente - reenviar sem criar novo no MP
         // Se o cliente clicar em "Pagar com PIX" duas vezes,
         // retorna o mesmo QR code sem cobrar novamente
@@ -97,7 +103,7 @@ public class MercadoPagoPaymentService {
                     .transactionAmount(order.getTotalAmount())
                     .paymentMethodId("pix")
                     .description("Pedido #" + order.getOrderId())
-                    .notificationUrl(baseUrl + "")
+                    .notificationUrl(baseUrl + "/api/v1/webhooks/mercadopago")
                     .externalReference(order.getOrderId().toString())
                     .payer(PaymentPayerRequest.builder()
                             .email(pixCheckoutRequestDTO.payerEmail())
@@ -146,12 +152,11 @@ public class MercadoPagoPaymentService {
             );
 
         } catch (MPApiException e) {
-            LOG.error("MP API error ao criar PIX: {} - {}",
-                    e.getStatusCode(), e.getApiResponse().getContent());
+            LOG.error("MP API error ao criar PIX: status={}", e.getStatusCode());
             payment.reject();
             paymentCommandRepository.save(payment);
             throw new PaymentException(
-                    "Falha ao criar PIX: " + e.getApiResponse().getContent());
+                    "Falha ao criar PIX. Tente novamente.");
         } catch (MPException e) {
             LOG.error("MP SDK error ao criar PIX: {}", e.getMessage());
             payment.reject();
@@ -164,12 +169,13 @@ public class MercadoPagoPaymentService {
     // CARTÃO ONLINE
     // ══════════════════════════════════════════════════════════════════════════
 
-    @Transactional
-    public CardPaymentResponseDTO createCardPayment(Long orderId, CardCheckoutRequestDTO cardCheckoutRequestDTO) {
+    @Transactional("commandTransactionManager")
+    public CardPaymentResponseDTO createCardPayment(Long orderId, Long userId, CardCheckoutRequestDTO cardCheckoutRequestDTO) {
 
         // GUARDA 1: lock pessimista
         OrderCommandEntity order = orderCommandRepository.findByIdForUpdate(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
+        assertOwner(order, userId);
         // GUARDA 2: status da ordem
         if (order.getStatus() == OrderStatus.PAID) {
             throw new PaymentException("Pedido #" + orderId + " já foi pago.");
@@ -209,7 +215,7 @@ public class MercadoPagoPaymentService {
                     .description("Pedido #" + orderId)
                     .installments(cardCheckoutRequestDTO.installments())
                     .paymentMethodId(cardCheckoutRequestDTO.paymentMethodId())
-                    .notificationUrl(baseUrl + "")
+                    .notificationUrl(baseUrl + "/api/v1/webhooks/mercadopago")
                     .externalReference(orderId.toString())
                     .payer(PaymentPayerRequest.builder()
                             .email(cardCheckoutRequestDTO.payerEmail())
@@ -247,7 +253,7 @@ public class MercadoPagoPaymentService {
             payment.setPaymentStatus(status);
 
             if (status == PaymentStatus.APPROVED) {
-                order.markAsPaid();
+                approvals.approve(payment, mp.getId().toString());
             }
 
             paymentCommandRepository.save(payment);
@@ -267,11 +273,10 @@ public class MercadoPagoPaymentService {
             );
 
         } catch (MPApiException e) {
-            LOG.error("MP API error ao processar cartão: {} - {}",
-                    e.getStatusCode(), e.getApiResponse().getContent());
+            LOG.error("MP API error ao processar cartão: status={}", e.getStatusCode());
             payment.reject();
             paymentCommandRepository.save(payment);
-            throw new PaymentException("Falha ao processar cartão: " + e.getApiResponse().getContent());
+            throw new PaymentException("Falha ao processar cartão. Tente novamente.");
         } catch (MPException e) {
             LOG.error("MP SDK error ao processar cartão: {}", e.getMessage());
             payment.reject();
@@ -284,7 +289,8 @@ public class MercadoPagoPaymentService {
     // PRESENCIAL
     // ══════════════════════════════════════════════════════════════════════════
 
-    @Transactional
+    @Transactional("commandTransactionManager")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public InPersonPaymentResponseDTO registerInPersonPayment(Long orderId, InPersonCheckoutRequestDTO dto) {
 
         // GUARDA 1: lock pessimista
@@ -306,7 +312,8 @@ public class MercadoPagoPaymentService {
         }
 
         PaymentCommandEntity payment = PaymentCommandEntity.forInPerson(order, dto.method());
-        order.markAsPaid();
+        paymentCommandRepository.saveAndFlush(payment);
+        approvals.approve(payment, null);
 
         paymentCommandRepository.save(payment);
         orderCommandRepository.save(order);
@@ -326,12 +333,15 @@ public class MercadoPagoPaymentService {
     // Helpers
     // ══════════════════════════════════════════════════════════════════════════
 
+    private void assertOwner(OrderCommandEntity order, Long userId) {
+        if (userId == null || !userId.equals(order.getUserId())) throw new ResourceNotFoundException("Pedido não encontrado");
+    }
     private PaymentStatus mapMpStatus(String mpStatus) {
         return switch (mpStatus.toLowerCase()) {
             case "approved" -> PaymentStatus.APPROVED;
             case "rejected" -> PaymentStatus.REJECTED;
             case "cancelled" -> PaymentStatus.CANCELLED;
-            case "refudend" -> PaymentStatus.REFUNDED;
+            case "refunded" -> PaymentStatus.REFUNDED;
             case "in_process" -> PaymentStatus.IN_PROCESS;
             default -> PaymentStatus.PENDING;
         };

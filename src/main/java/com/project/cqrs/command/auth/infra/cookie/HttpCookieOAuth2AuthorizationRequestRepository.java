@@ -1,101 +1,50 @@
 package com.project.cqrs.command.auth.infra.cookie;
-
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.*;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.stereotype.Component;
-import org.springframework.util.SerializationUtils;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
+import java.time.Duration;
+import java.util.*;
 
-import java.util.Arrays;
-import java.util.Base64;
-
-@Slf4j
 @Component
-public class HttpCookieOAuth2AuthorizationRequestRepository
-        implements AuthorizationRequestRepository<OAuth2AuthorizationRequest> {
-
-    private static final String COOKIE_NAME = "oauth2_auth_request";
-    private static final int COOKIE_EXPIRE_SECONDS = 180; // 3 min — tempo do fluxo OAuth
-
-
-    // ── Carrega a requisição de autorização salva no ‘cookie’ ──────────────────
-    @Override
-    public OAuth2AuthorizationRequest loadAuthorizationRequest(HttpServletRequest request) {
-        log.info("Passei por aqui");
-        return readCookie(request)
-                .map(this::deserialize)
-                .orElse(null);
+public class HttpCookieOAuth2AuthorizationRequestRepository implements AuthorizationRequestRepository<OAuth2AuthorizationRequest> {
+    private static final String COOKIE = "oauth2_auth_request";
+    private final StringRedisTemplate redis;
+    private final ObjectMapper mapper;
+    private final boolean secure;
+    public HttpCookieOAuth2AuthorizationRequestRepository(StringRedisTemplate redis, ObjectMapper mapper, @Value("${app.cookie.secure:true}") boolean secure) {
+        this.redis = redis; this.mapper = mapper; this.secure = secure;
     }
-
-    // ── Salva a requisição de autorização em ‘cookie’ (antes do redirect) ──────
-    @Override
-    public void saveAuthorizationRequest(OAuth2AuthorizationRequest authorizationRequest,
-                                         HttpServletRequest request,
-                                         HttpServletResponse response) {
-        if (authorizationRequest == null) {
-            deleteCookie(request, response);
-            return;
-        }
-
-        ResponseCookie cookie = ResponseCookie.from(COOKIE_NAME, serialize(authorizationRequest))
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Lax")        // Lax obrigatório — precisa sobreviver ao redirect do provider
-                .path("/")
-                .maxAge(COOKIE_EXPIRE_SECONDS)
-                .build();
-
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    public record StoredRequest(String authorizationUri, String clientId, String redirectUri, Set<String> scopes, String state, Map<String, Object> additionalParameters, Map<String, Object> attributes) {}
+    @Override public OAuth2AuthorizationRequest loadAuthorizationRequest(HttpServletRequest request) { return load(request, false); }
+    @Override public OAuth2AuthorizationRequest removeAuthorizationRequest(HttpServletRequest request, HttpServletResponse response) {
+        var result = load(request, true); cookie(response, "", 0); return result;
     }
-
-    // ── Remove após o callback (usado internamente pelo Spring) ─────────────
-    @Override
-    public OAuth2AuthorizationRequest removeAuthorizationRequest(HttpServletRequest request,
-                                                                 HttpServletResponse response) {
-        OAuth2AuthorizationRequest authRequest = loadAuthorizationRequest(request);
-        deleteCookie(request, response);
-        return authRequest;
+    @Override public void saveAuthorizationRequest(OAuth2AuthorizationRequest authorization, HttpServletRequest request, HttpServletResponse response) {
+        if (authorization == null) { removeAuthorizationRequest(request, response); return; }
+        try {
+            String id = UUID.randomUUID().toString();
+            var stored = new StoredRequest(authorization.getAuthorizationUri(), authorization.getClientId(), authorization.getRedirectUri(), authorization.getScopes(), authorization.getState(), authorization.getAdditionalParameters(), authorization.getAttributes());
+            redis.opsForValue().set("oauth2_request:" + id, mapper.writeValueAsString(stored), Duration.ofMinutes(3));
+            cookie(response, id, 180);
+        } catch (Exception e) { throw new IllegalStateException("Não foi possível iniciar OAuth2", e); }
     }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private java.util.Optional<String> readCookie(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) return java.util.Optional.empty();
-
-        return Arrays.stream(cookies)
-                .filter(c -> COOKIE_NAME.equals(c.getName()))
-                .map(Cookie::getValue)
-                .filter(v -> v != null && !v.isBlank())
-                .findFirst();
+    private OAuth2AuthorizationRequest load(HttpServletRequest request, boolean remove) {
+        if (request.getCookies() == null) return null;
+        var id = Arrays.stream(request.getCookies()).filter(c -> COOKIE.equals(c.getName())).map(Cookie::getValue).findFirst().orElse(null);
+        if (id == null || !id.matches("[0-9a-f-]{36}")) return null;
+        String value = remove ? redis.opsForValue().getAndDelete("oauth2_request:" + id) : redis.opsForValue().get("oauth2_request:" + id);
+        if (value == null) return null;
+        try {
+            var stored = mapper.readValue(value, StoredRequest.class);
+            return OAuth2AuthorizationRequest.authorizationCode().authorizationUri(stored.authorizationUri()).clientId(stored.clientId()).redirectUri(stored.redirectUri()).scopes(stored.scopes()).state(stored.state()).additionalParameters(stored.additionalParameters()).attributes(stored.attributes()).build();
+        } catch (Exception e) { return null; }
     }
-
-    private void deleteCookie(HttpServletRequest request, HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from(COOKIE_NAME, "")
-                .httpOnly(true)
-                .secure(true)
-                .sameSite("Lax")
-                .path("/")
-                .maxAge(0)              // expira imediatamente
-                .build();
-
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-    }
-
-    private String serialize(OAuth2AuthorizationRequest request) {
-        return Base64.getUrlEncoder().encodeToString(
-                SerializationUtils.serialize(request)
-        );
-    }
-
-    private OAuth2AuthorizationRequest deserialize(String value) {
-        return (OAuth2AuthorizationRequest) SerializationUtils.deserialize(
-                Base64.getUrlDecoder().decode(value)
-        );
+    private void cookie(HttpServletResponse response, String value, int age) {
+        response.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from(COOKIE, value).httpOnly(true).secure(secure).sameSite("Lax").path("/").maxAge(age).build().toString());
     }
 }

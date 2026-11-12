@@ -1,8 +1,6 @@
 package com.project.cqrs.command.auth.infra.security;
 
-import com.project.cqrs.command.auth.dto.CreateUserRequestDTO;
 import com.project.cqrs.command.auth.dto.UserRequestDTO;
-import com.project.cqrs.command.auth.model.UserCommandEntity;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -34,11 +32,12 @@ public class JwtTokenService {
         this.expirationTime = expirationTime;
     }
 
-    public String generateToken(UserRequestDTO userRequestDTO) {
+    public String generateToken(UserRequestDTO userRequestDTO, String sessionId) {
         Instant now = Instant.now();
-        log.info("Passei por aqui");
+
         return Jwts.builder()
                 .issuer(ISSUER)
+                .claim("sid", sessionId)
                 .subject(userRequestDTO.userId().toString())
                 .claim(CLAIM_EMAIL, userRequestDTO.userEmail())
                 .claim(CLAIM_ROLE, userRequestDTO.userRole().name())

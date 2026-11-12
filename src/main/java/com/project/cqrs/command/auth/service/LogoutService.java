@@ -3,6 +3,7 @@ package com.project.cqrs.command.auth.service;
 import com.project.cqrs.command.auth.infra.cookie.CookieTokenUtil;
 import com.project.cqrs.command.auth.infra.kafka.UserEventProducer;
 import com.project.cqrs.command.auth.infra.security.RefreshTokenService;
+import com.project.cqrs.command.auth.infra.security.JwtAuthFilter;
 import com.project.cqrs.shared.event.user.UserLogoutEvent;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,10 +30,8 @@ public class LogoutService {
     public void logout(HttpServletRequest request, HttpServletResponse response) {
         String userId = resolveUserId();
 
-        cookieTokenUtil.readRefreshToken(request).ifPresent(refreshToken -> {
-            refreshTokenService.revoke(refreshToken);
-            logger.info("Refresh token has been revoked", userId);
-        });
+        refreshTokenService.revokeSession(
+                (String) request.getAttribute(JwtAuthFilter.SESSION_ATTRIBUTE), userId);
 
         cookieTokenUtil.clearAll(response);
 

@@ -13,7 +13,7 @@ import com.project.cqrs.query.category.repository.CategoryQueryRepository;
 import com.project.cqrs.shared.kafka.factory.KafkaContainerFactories;
 import com.project.cqrs.shared.kafka.groupId.KafkaConsumerGroups;
 import com.project.cqrs.shared.kafka.topics.CategoryTopics;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -22,7 +22,7 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 @Component
-@Transactional
+@Transactional("queryTransactionManager")
 public class CategoryEventConsumer {
 
     private static final Logger log =  LoggerFactory.getLogger(CategoryEventConsumer.class);
@@ -58,7 +58,7 @@ public class CategoryEventConsumer {
 
             cacheSynchronizationService.putCategoryDetailInCache(CategoryQueryDTO.from(saved));
 
-            cacheSynchronizationService.evictProductListCache();
+            cacheSynchronizationService.evictCategoryCache();
 
             idempotencyService.markCompleted(processed);
 
@@ -93,7 +93,7 @@ public class CategoryEventConsumer {
 
             cacheSynchronizationService.putCategoryDetailInCache(CategoryQueryDTO.from(saved));
 
-            cacheSynchronizationService.evictProductListCache();
+            cacheSynchronizationService.evictCategoryCache();
 
             idempotencyService.markCompleted(processed);
 
@@ -118,9 +118,9 @@ public class CategoryEventConsumer {
             categoryQueryRepository.findById(event.getCategoryId())
                     .ifPresent(categoryQueryRepository::delete);
 
-            cacheSynchronizationService.evictDetailFromCache(event.getCategoryId());
+            cacheSynchronizationService.evictCategoryCache();
 
-            cacheSynchronizationService.evictProductListCache();
+            cacheSynchronizationService.evictCategoryCache();
 
             idempotencyService.markCompleted(processed);
         } catch (Exception e) {

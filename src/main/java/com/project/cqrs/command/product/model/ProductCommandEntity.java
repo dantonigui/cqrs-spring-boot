@@ -24,7 +24,7 @@ public class ProductCommandEntity {
     @Column(nullable = false)
     private String productCode;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal productPrice;
 
     @Column(nullable = false)
@@ -34,6 +34,19 @@ public class ProductCommandEntity {
     @JoinColumn(name = "category", nullable = false)
     private CategoryCommandEntity categoryCommandEntity;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private Integer stock = 0;
+
+    public void reserveStock(int quantity) {
+        if (quantity <= 0) throw new IllegalArgumentException("Quantidade deve ser positiva");
+        if (stock < quantity) throw new com.project.cqrs.config.exception.InsufficientStockException(productId);
+        stock -= quantity;
+    }
+    public void replenishStock(int quantity) {
+        if (quantity <= 0) throw new IllegalArgumentException("Quantidade deve ser positiva");
+        stock = Math.addExact(stock, quantity);
+    }
     // Factory Method
     public static ProductCommandEntity createProduct(String productName,
                                               String productCode,

@@ -29,18 +29,20 @@ public class OrderEventConsumer {
     private final OrderQueryRepository orderQueryRepository;
     private final OrderQueryService orderQueryService;
     private final IdempotencyService idempotencyService;
+    private final com.project.cqrs.query.payment.repository.PaymentQueryRepository payments;
 
     public OrderEventConsumer(OrderQueryRepository orderQueryRepository,
                               OrderQueryService orderQueryService,
-                              IdempotencyService idempotencyService) {
+                              IdempotencyService idempotencyService, com.project.cqrs.query.payment.repository.PaymentQueryRepository payments) {
         this.orderQueryRepository = orderQueryRepository;
         this.orderQueryService = orderQueryService;
         this.idempotencyService = idempotencyService;
+        this.payments = payments;
     }
 
     // ── order.created ─────────────────────────────────────────────────────────
 
-    @Transactional
+    @Transactional("queryTransactionManager")
     @KafkaListener(topics = OrderTopics.ORDER_CREATED, groupId = KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
     public void onOrderCreated(OrderCreatedEvent orderCreatedEvent, @Header(value = KafkaHeaders.DELIVERY_ATTEMPT, required = false) Integer deliveryAttempt) {
 
@@ -102,7 +104,7 @@ public class OrderEventConsumer {
 
     // ── order.status.changed ──────────────────────────────────────────────────
 
-    @Transactional
+    @Transactional("queryTransactionManager")
     @KafkaListener(topics = OrderTopics.ORDER_UPDATED, groupId = KafkaConsumerGroups.QUERY, containerFactory = KafkaContainerFactories.RESILIENT)
     public void onOrderStatusChanged(OrderStatusChangedEvent orderStatusChangedEvent,  @Header(value = KafkaHeaders.DELIVERY_ATTEMPT, required = false) Integer deliveryAttempt) {
 
@@ -116,7 +118,7 @@ public class OrderEventConsumer {
             log.info("Processando order.status.changed: orderId={}", orderStatusChangedEvent.orderId(),
                     orderStatusChangedEvent.oldStatus(),  orderStatusChangedEvent.newStatus());
 
-            OrderQueryEntity order = orderQueryRepository.findByOrderId(orderStatusChangedEvent.orderId())
+            OrderQueryEntity order = orderQueryRepository.findByOrderIdForUpdate(orderStatusChangedEvent.orderId())
                     .orElseThrow(() -> new IllegalStateException("Order not Found: " + orderStatusChangedEvent.orderId()));
 
                 order.updateStatus(orderStatusChangedEvent.newStatus());
@@ -139,7 +141,7 @@ public class OrderEventConsumer {
 
     // ── order.cancelled ───────────────────────────────────────────────────────
 
-    @Transactional
+    @Transactional("queryTransactionManager")
     @KafkaListener(topics = OrderTopics.ORDER_DELETED, groupId = KafkaConsumerGroups.QUERY,containerFactory = KafkaContainerFactories.RESILIENT)
     public void onOrderCancelled(OrderCancelledEvent orderCancelledEvent, @Header(value = KafkaHeaders.DELIVERY_ATTEMPT, required = false) Integer deliveryAttempt) {
 
@@ -152,10 +154,13 @@ public class OrderEventConsumer {
         try {
             log.info("Processando order.cancelled: orderId={}", orderCancelledEvent.orderId());
 
-            OrderQueryEntity order = orderQueryRepository.findByOrderId(orderCancelledEvent.orderId())
+            OrderQueryEntity order = orderQueryRepository.findByOrderIdForUpdate(orderCancelledEvent.orderId())
                     .orElseThrow(() -> new IllegalStateException("Order not found: " + orderCancelledEvent.orderId()));
 
             order.updateStatus(OrderStatus.CANCELLED);
+            var refunded = payments.findByOrderId(orderCancelledEvent.orderId());
+            refunded.forEach(com.project.cqrs.query.payment.model.PaymentQueryEntity::markRefunded);
+            payments.saveAll(refunded);
 
             orderQueryRepository.save(order);
 

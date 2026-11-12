@@ -1,139 +1,57 @@
 package com.project.cqrs.command.order.service;
-
-import com.mercadopago.client.payment.PaymentRefundClient;
-import com.mercadopago.client.payment.PaymentRefundCreateRequest;
-import com.mercadopago.exceptions.MPApiException;
-import com.mercadopago.exceptions.MPException;
 import com.project.cqrs.command.order.kafka.producer.OrderEventProducer;
-import com.project.cqrs.command.order.model.OrderCommandEntity;
 import com.project.cqrs.command.order.repository.OrderCommandRepository;
 import com.project.cqrs.command.payment.repository.PaymentCommandRepository;
+import com.project.cqrs.command.payment.service.PaymentGateway;
+import com.project.cqrs.command.product.service.InventoryService;
 import com.project.cqrs.config.exception.ResourceNotFoundException;
-import com.project.cqrs.shared.enums.OrderStatus;
-import com.project.cqrs.shared.enums.PaymentStatus;
+import com.project.cqrs.shared.enums.*;
 import com.project.cqrs.shared.event.order.OrderCancelledEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-
-/**
- * Orquestra o cancelamento de um pedido.
- *
- * Regras de negócio:
- *   - Pedido PAID     → estorna o pagamento no Mercado Pago antes de cancelar
- *   - Pedido PENDING / AWAITING_PAYMENT → cancela sem estorno
- *   - Pedido CANCELLED → rejeita (já cancelado)
- *
- * Após cancelar, publica OrderCancelledEvent no Kafka para o
- * Query Side atualizar a projeção de leitura.
- */
 @Service
 public class OrderCancelledService {
-
-    private static final Logger log =  LoggerFactory.getLogger(OrderCancelledService.class);
-
-    private final OrderCommandRepository orderRepository;
-    private final PaymentCommandRepository paymentRepository;
-    private final OrderEventProducer orderEventProducer;
-
-    public OrderCancelledService(
-            OrderCommandRepository orderRepository,
-            PaymentCommandRepository paymentRepository,
-            OrderEventProducer orderEventProducer
-    ) {
-        this.orderRepository = orderRepository;
-        this.paymentRepository = paymentRepository;
-        this.orderEventProducer = orderEventProducer;
+    private final OrderCommandRepository orders;
+    private final PaymentCommandRepository payments;
+    private final OrderEventProducer events;
+    private final InventoryService inventory;
+    private final PaymentGateway gateway;
+    public OrderCancelledService(OrderCommandRepository orders, PaymentCommandRepository payments, OrderEventProducer events, InventoryService inventory, PaymentGateway gateway) {
+        this.orders = orders; this.payments = payments; this.events = events; this.inventory = inventory; this.gateway = gateway;
     }
-
-    @Transactional
+    @Transactional("commandTransactionManager")
+    public void expireOrder(Long orderId, Long userId) {
+        var order = orders.findByIdForUpdate(orderId).orElseThrow();
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.AWAITING_PAYMENT) return;
+        cancelOrder(orderId, userId, "Reserva de estoque expirada");
+    }
+    @Transactional("commandTransactionManager")
     public void cancelOrder(Long orderId, Long userId, String reason) {
-
-        //Lock pessimista - evita cancelamento simultâneo
-        OrderCommandEntity order = orderRepository.findByIdForUpdate(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado" + orderId));
-
-        // Se user for diferente do user do pedido dá erro.
-        if (!userId.equals(order.getUserId())) {
-            throw new ResourceNotFoundException("UserId diferente do OrderId");
+        var order = orders.findByIdForUpdate(orderId).orElseThrow(() -> new ResourceNotFoundException("Pedido não encontrado"));
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean admin = auth != null && auth.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        if (!admin && !userId.equals(order.getUserId())) throw new ResourceNotFoundException("Pedido não encontrado");
+        if (order.getStatus() == OrderStatus.CANCELLED) throw new IllegalStateException("Pedido já cancelado");
+        var orderPayments = payments.findByOrderOrderId(orderId);
+        if (!admin && orderPayments.stream().anyMatch(p -> p.getPaymentType() == PaymentType.IN_PERSON && p.getPaymentStatus() == PaymentStatus.APPROVED)) {
+            throw new org.springframework.security.access.AccessDeniedException("Somente ADMIN pode cancelar pedido pago presencialmente");
         }
-
-        // Se pedido já estiver marcado como Cancelado dá erro.
-        if (order.getStatus().equals(OrderStatus.CANCELLED)) {
-            throw new IllegalStateException("Já está cancelado!");
+        String refundedId = null;
+        for (var payment : orderPayments) {
+            if (payment.getPaymentStatus() == PaymentStatus.REFUNDED || payment.getPaymentStatus() == PaymentStatus.REJECTED) continue;
+            if (payment.getMpPaymentId() != null) {
+                boolean refunded = gateway.cancelOrRefund(payment.getMpPaymentId());
+                payment.setPaymentStatus(refunded ? PaymentStatus.REFUNDED : PaymentStatus.CANCELLED);
+                if (refunded) refundedId = payment.getMpPaymentId();
+            } else {
+                payment.setPaymentStatus(payment.getPaymentStatus() == PaymentStatus.APPROVED ? PaymentStatus.REFUNDED : PaymentStatus.CANCELLED);
+            }
+            payments.save(payment);
         }
-
-        String mpPaymentId = null;
-
-        // Se o pedido está PAGO → tenta estornar no Mercado Pago
-        if(order.getStatus() == OrderStatus.PAID) {
-            mpPaymentId = refundPayment(orderId);
-        }
-
-        //Cancela o pagamento pendente no banco (se houver)
-        paymentRepository.findAll().stream()
-                .filter(p -> p.getOrder().getOrderId().equals(orderId))
-                .filter(p -> p.getPaymentStatus() == PaymentStatus.PENDING || p.getPaymentStatus() == PaymentStatus.IN_PROCESS)
-                .forEach(p -> {
-                    p.setPaymentStatus(PaymentStatus.CANCELLED);
-                    paymentRepository.save(p);
-                });
-
-        // Cancela o pedido
+        inventory.release(order.getItems());
         order.markAsCancelled();
-        orderRepository.save(order);
-
-        log.info("Pedido cancelado: orderId= {}, userId= {}, reason= {}", orderId, userId, reason);
-
-        OrderCancelledEvent event = OrderCancelledEvent.of(
-                orderId,
-                userId,
-                mpPaymentId,
-                order.getTotalAmount(),
-                reason
-        );
-        orderEventProducer.publishOrderCancelled(orderId.toString(), event);
-    }
-
-    /**
-     * Solicita estorno total no Mercado Pago.
-     *
-     * @return mpPaymentId do pagamento estornado, ou null se não havia
-     *         pagamento com ID no MP (ex: pagamento presencial)
-     */
-
-    private String refundPayment(Long orderId) {
-        return paymentRepository.findAll().stream()
-                .filter(p -> p.getOrder().getOrderId().equals(orderId))
-                .filter(p -> p.getPaymentStatus() == PaymentStatus.APPROVED)
-                .filter(p -> p.getMpPaymentId() != null)
-                .findFirst()
-                .map(payment -> {
-                    try {
-                        // Estorno total - sem informar valor = estorno integral
-                        new PaymentRefundClient().refund(Long.parseLong(payment.getMpPaymentId()));
-
-                        payment.setPaymentStatus(PaymentStatus.REFUNDED);
-                        paymentRepository.save(payment);
-
-                        log.info("Estorno solicitado no MP: mpPaymentId= {}, orderId= {}", payment.getMpPaymentId(), orderId);
-
-                        return payment.getMpPaymentId();
-                    } catch (MPApiException e) {
-                        log.error("Erro na API do MP ao estornar: {} - {}",
-                                e.getStatusCode(), e.getApiResponse().getContent());
-
-                        throw new IllegalStateException(
-                                "Falha ao estornar pagamento no Mercado Pago. " +
-                                        "Tente novamente ou contate o suporte"
-                        );
-                    } catch (MPException e) {
-                        log.error("Erro SDK ao estornar: {}", e.getMessage());
-                        throw new IllegalStateException(
-                                "Erro interno ao processar estorno.");
-                    }
-                }).orElse(null);
+        orders.save(order);
+        events.publishOrderCancelled(orderId.toString(), OrderCancelledEvent.of(orderId, order.getUserId(), refundedId, order.getTotalAmount(), reason));
     }
 }

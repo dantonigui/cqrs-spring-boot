@@ -4,16 +4,16 @@ import com.project.cqrs.shared.event.category.CategoryCreateEvent;
 import com.project.cqrs.shared.event.category.CategoryDeleteEvent;
 import com.project.cqrs.shared.event.category.CategoryUpdateEvent;
 import com.project.cqrs.shared.kafka.topics.CategoryTopics;
-import org.springframework.kafka.core.KafkaTemplate;
+import com.project.cqrs.command.outbox.OutboxPublisher;
 import org.springframework.stereotype.Component;
 
 @Component
 public class CategoryEventProducer {
 
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxPublisher kafkaTemplate;
 
-    public CategoryEventProducer(KafkaTemplate<String, Object> kafkaTemplate) {
+    public CategoryEventProducer(OutboxPublisher kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
 
@@ -30,6 +30,6 @@ public class CategoryEventProducer {
     }
 
     private void send(String topic, String key, Object event) {
-        kafkaTemplate.send(topic, key, event);
+        kafkaTemplate.publish(topic, key, event);
     }
 }

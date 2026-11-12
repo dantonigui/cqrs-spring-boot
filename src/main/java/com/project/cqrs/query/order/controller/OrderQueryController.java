@@ -45,7 +45,7 @@ public class OrderQueryController {
             @ApiResponse(responseCode = "401", description = "Não autenticado")
     })
     @GetMapping
-    public ResponseEntity<Page<OrderQueryResponseDTO>>findMyOrders(@AuthenticationPrincipal String userId,
+    public ResponseEntity<com.project.cqrs.shared.dto.PageResponseDTO<OrderQueryResponseDTO>>findMyOrders(@AuthenticationPrincipal String userId,
                                                                    @ParameterObject @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
 
         return ResponseEntity.ok(orderQueryService.findByUser(pageable, Long.parseLong(userId)));

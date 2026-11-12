@@ -32,7 +32,8 @@ public class ProductCommandService {
     }
 
     @Transactional()
-    @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCTS, allEntries = true)
+    @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCTS,
+            allEntries = true)
     public void createProduct(CreateProductRequestDTO productDto) {
         CategoryCommandEntity category = categoryRepository.findById(productDto.categoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found" + productDto.categoryId()));
@@ -51,7 +52,7 @@ public class ProductCommandService {
             @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCT_DETAILS, key = "#id")
     })
     public void updateProduct(Long id, UpdateProductRequestDTO requestDTO) {
-        ProductCommandEntity  productEntity = productRepository.findById(id)
+        ProductCommandEntity  productEntity = productRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found" + id));
 
         CategoryCommandEntity categoryCommandEntity = categoryRepository.findById(requestDTO.categoryId())
@@ -72,7 +73,7 @@ public class ProductCommandService {
             @CacheEvict(cacheNames = CacheTopics.CACHE_PRODUCT_DETAILS, key = "#id")
     })
     public void deleteProduct(Long id) {
-            ProductCommandEntity product = productRepository.findById(id)
+            ProductCommandEntity product = productRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product Not Found with id" + id));
 
             productRepository.delete(product);

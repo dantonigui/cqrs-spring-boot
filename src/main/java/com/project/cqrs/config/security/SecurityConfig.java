@@ -38,6 +38,7 @@ public class SecurityConfig {
     private final UserCommandRepository userCommandRepository;
     private final CookieTokenUtil cookieTokenUtil;
     private final RefreshTokenService refreshTokenService;
+    private final HttpCookieOAuth2AuthorizationRequestRepository oauthRepository;
 
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
@@ -47,27 +48,28 @@ public class SecurityConfig {
                           JwtTokenService jwtTokenService,
                           UserCommandRepository userCommandRepository,
                           CookieTokenUtil cookieTokenUtil,
-                          RefreshTokenService refreshTokenService) {
+                          RefreshTokenService refreshTokenService, HttpCookieOAuth2AuthorizationRequestRepository oauthRepository) {
         this.customOAuth2UserService = customOAuth2UserService;
         this.jwtAuthFilter = jwtAuthFilter;
         this.jwtTokenService = jwtTokenService;
         this.userCommandRepository = userCommandRepository;
         this.cookieTokenUtil = cookieTokenUtil;
         this.refreshTokenService = refreshTokenService;
+        this.oauthRepository = oauthRepository;
     }
 
-    @Bean
-    public HttpCookieOAuth2AuthorizationRequestRepository cookieAuthorizationRequestRepository() {
-        return new HttpCookieOAuth2AuthorizationRequestRepository();
-    }
+
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(org.springframework.security.web.csrf.CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
+                        .ignoringRequestMatchers("/api/v1/webhooks/mercadopago"))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // Stateless — JWT via cookie, sem sessão no servidor
+                // JWT via cookie, sem sessão HTTP; sessões revogáveis mantidas no Redis
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                                 .sessionFixation().none())
@@ -98,10 +100,10 @@ public class SecurityConfig {
                                 "/login/oauth2/**",
                                 "/login/**",
                                 "/error",
-                                "/favicon.ico",
+                                "/favicon.ico", "/api/v1/csrf", "/actuator/health",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**", "/swagger", "/api-docs/**"
                         ).permitAll()
 
                         // Logout — qualquer autenticado
@@ -116,18 +118,21 @@ public class SecurityConfig {
 
                         // Query — qualquer autenticado (USER e ADMIN)
 //                        .requestMatchers("/api/v1/query/**").authenticated()
-                                .requestMatchers("/admin/dlq/*").permitAll()
-                                .requestMatchers("/api/v1/query/**").permitAll()
+                                .requestMatchers("/admin/**", "/actuator/**").hasRole("ADMIN")
+                                .requestMatchers("/api/v1/query/**").authenticated()
                         // Command — apenas ADMIN
 //                        .requestMatchers("/api/v1/command/**").hasRole("ADMIN")
-                                .requestMatchers("/api/v1/command/**").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/mercadopago").permitAll()
+                                 .requestMatchers(HttpMethod.POST, "/api/v1/command/orders/*/checkout/in-person").hasRole("ADMIN")
+                                 .requestMatchers("/api/v1/command/orders/**").authenticated()
+                                 .requestMatchers("/api/v1/command/**").hasRole("ADMIN")
 
                         .anyRequest().authenticated()
                 )
 
                 .oauth2Login(oauth2 -> oauth2
                         .authorizationEndpoint(auth -> auth
-                                .authorizationRequestRepository(cookieAuthorizationRequestRepository())
+                                .authorizationRequestRepository(oauthRepository)
                         )
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(customOAuth2UserService))
@@ -142,7 +147,9 @@ public class SecurityConfig {
 
     @Bean
     public OAuth2AuthSucessHandler oAuth2AuthSuccessHandler() {
-        return new OAuth2AuthSucessHandler(jwtTokenService, userCommandRepository, cookieTokenUtil, refreshTokenService);
+        OAuth2AuthSucessHandler handler = new OAuth2AuthSucessHandler(jwtTokenService, userCommandRepository, cookieTokenUtil, refreshTokenService);
+        handler.setFrontendUrl(frontendUrl);
+        return handler;
     }
 
     // CORS CONFIG

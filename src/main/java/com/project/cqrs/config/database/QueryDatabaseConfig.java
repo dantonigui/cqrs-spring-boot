@@ -22,7 +22,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
 @EnableJpaRepositories(
-        basePackages = "com.project.cqrs.query",
+        basePackages = {"com.project.cqrs.query", "com.project.cqrs.admin.idempotency.repository"},
         entityManagerFactoryRef = "queryEntityManagerFactory",
         transactionManagerRef = "queryTransactionManager"
 )
@@ -36,6 +36,7 @@ public class QueryDatabaseConfig {
     }
 
     @Bean
+    @ConfigurationProperties("spring.datasource.query.hikari")
     public DataSource queryDataSource(
             @Qualifier("queryDataSourceProperties")
             DataSourceProperties properties
@@ -49,6 +50,7 @@ public class QueryDatabaseConfig {
 
 
     @Bean
+    @org.springframework.context.annotation.DependsOn("queryFlyway")
     public LocalContainerEntityManagerFactoryBean queryEntityManagerFactory(
             EntityManagerFactoryBuilder builder,
             @Qualifier("queryDataSource")
@@ -57,7 +59,7 @@ public class QueryDatabaseConfig {
 
         return builder
                 .dataSource(dataSource)
-                .packages("com.project.cqrs.query")
+                .packages("com.project.cqrs.query", "com.project.cqrs.admin.idempotency.entity")
                 .persistenceUnit("query")
                 .build();
     }

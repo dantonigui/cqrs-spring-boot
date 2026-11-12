@@ -26,6 +26,9 @@ public class CookieTokenUtil {
     @Value("${app.refresh-token.expiration-ms}")
     private long refreshExpirationMs;
 
+    @Value("${app.cookie.secure:true}")
+    private boolean secure = true;
+
     public void writeToken(HttpServletResponse response, String token) {
         ResponseCookie cookie = buildAccessCookie(token);
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
@@ -46,7 +49,7 @@ public class CookieTokenUtil {
     public void clearToken(HttpServletResponse response) {
         ResponseCookie cookie = ResponseCookie.from(COOKIE_NAME, "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(secure)
                 .sameSite("Strict")
                 .path("/")
                 .maxAge(0)
@@ -59,9 +62,9 @@ public class CookieTokenUtil {
         int maxAgeSeconds = (int) (refreshExpirationMs / 1000);
         ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, refreshToken)
                 .httpOnly(true)
-                .secure(true)
+                .secure(secure)
                 .sameSite("Strict")
-                .path("/auth/refresh")
+                .path("/")
                 .maxAge(maxAgeSeconds)
                 .build();
 
@@ -84,7 +87,7 @@ public class CookieTokenUtil {
     private ResponseCookie buildAccessCookie(String value) {
         return ResponseCookie.from(COOKIE_NAME, value)
                 .httpOnly(true)
-                .secure(true)
+                .secure(secure)
                 .sameSite("Lax")
                 .path("/")
                 .maxAge(COOKIE_MAX_AGE)
@@ -103,7 +106,7 @@ public class CookieTokenUtil {
     private void clearCookie(HttpServletResponse response, String name) {
         ResponseCookie cookie = ResponseCookie.from(name, "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(secure)
                 .sameSite("Strict")
                 .path("/")
                 .maxAge(0)

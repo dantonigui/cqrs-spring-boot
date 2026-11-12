@@ -23,9 +23,11 @@ public class JpaConfig {
 
         properties.put(
                 "hibernate.hbm2ddl.auto",
-                "update"
+                "validate"
         );
 
+        properties.put("hibernate.physical_naming_strategy", "org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy");
+        properties.put("hibernate.implicit_naming_strategy", "org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy");
         return new EntityManagerFactoryBuilder(
                 new HibernateJpaVendorAdapter(),
                 properties,

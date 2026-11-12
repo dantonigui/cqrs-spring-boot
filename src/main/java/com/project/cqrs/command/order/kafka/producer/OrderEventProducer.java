@@ -6,7 +6,7 @@ import com.project.cqrs.shared.event.order.OrderStatusChangedEvent;
 import com.project.cqrs.shared.kafka.topics.OrderTopics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
+import com.project.cqrs.command.outbox.OutboxPublisher;
 import org.springframework.stereotype.Component;
 
 
@@ -15,9 +15,9 @@ public class OrderEventProducer {
 
     private static final Logger log = LoggerFactory.getLogger(OrderEventProducer.class);
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxPublisher kafkaTemplate;
 
-    public OrderEventProducer(KafkaTemplate<String, Object> kafkaTemplate) {
+    public OrderEventProducer(OutboxPublisher kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
 
@@ -34,16 +34,6 @@ public class OrderEventProducer {
     }
 
     private void send(String topic, String key, Object event) {
-        kafkaTemplate.send(topic, key, event)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Falha ao publicar {}: key={}, erro={}",
-                                topic, key, ex.getMessage());
-                    } else {
-                        log.info("{} publicado: key={}, partition={}, offset={}", topic, key,
-                                result.getRecordMetadata().partition(),
-                                result.getRecordMetadata().offset());
-                    }
-                });
+        kafkaTemplate.publish(topic, key, event);
     }
 }

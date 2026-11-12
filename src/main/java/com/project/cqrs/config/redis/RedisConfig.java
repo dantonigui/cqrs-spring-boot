@@ -23,7 +23,7 @@ public class RedisConfig {
 
     @Bean
     public GenericJackson2JsonRedisSerializer genericJackson2JsonRedisSerializer() {
-        return new GenericJackson2JsonRedisSerializer();
+        return new GenericJackson2JsonRedisSerializer().configure(mapper -> mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
     }
 
     @Bean
@@ -46,6 +46,7 @@ public class RedisConfig {
         return RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(10))
                 .disableCachingNullValues()
+                .computePrefixWith(name -> "cqrs:" + name + "::")
                 .serializeKeysWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(

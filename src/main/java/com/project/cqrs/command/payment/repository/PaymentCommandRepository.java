@@ -1,23 +1,11 @@
 package com.project.cqrs.command.payment.repository;
-
 import com.project.cqrs.command.payment.model.PaymentCommandEntity;
-import jakarta.persistence.LockModeType;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
-
-import java.util.Optional;
-
-public interface PaymentCommandRepository extends JpaRepository<PaymentCommandEntity,Long> {
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-    SELECT o
-    FROM OrderCommandEntity o
-    WHERE o.orderId = :orderId
-""")
+import java.util.*;
+public interface PaymentCommandRepository extends JpaRepository<PaymentCommandEntity, Long> {
+    @Query("select p from PaymentCommandEntity p where p.order.orderId = :orderId and p.paymentMethod = com.project.cqrs.shared.enums.PaymentMethod.PIX and p.paymentStatus = com.project.cqrs.shared.enums.PaymentStatus.PENDING")
     Optional<PaymentCommandEntity> findPendingPixByOrderId(@Param("orderId") Long orderId);
-
     Optional<PaymentCommandEntity> findByMpPaymentId(String mpPaymentId);
+    List<PaymentCommandEntity> findByOrderOrderId(Long orderId);
 }

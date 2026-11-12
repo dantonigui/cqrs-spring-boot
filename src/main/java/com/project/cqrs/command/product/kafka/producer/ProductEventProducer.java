@@ -6,7 +6,7 @@ import com.project.cqrs.shared.event.product.ProductUpdateEvent;
 import com.project.cqrs.shared.kafka.topics.ProductTopics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
+import com.project.cqrs.command.outbox.OutboxPublisher;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,9 +15,9 @@ public class ProductEventProducer {
 
     private static final Logger LOG = LoggerFactory.getLogger(ProductEventProducer.class);
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxPublisher kafkaTemplate;
 
-    public ProductEventProducer(KafkaTemplate<String, Object> kafkaTemplate) {
+    public ProductEventProducer(OutboxPublisher kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
 
@@ -37,6 +37,6 @@ public class ProductEventProducer {
     }
 
     private void send(String topic, String key, Object event) {
-        kafkaTemplate.send(topic, key, event);
+        kafkaTemplate.publish(topic, key, event);
     }
 }

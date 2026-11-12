@@ -59,13 +59,17 @@ public class PaymentQueryEntity {
     private LocalDateTime createdAt = LocalDateTime.now();
 
 
-    public static PaymentQueryEntity fromApprovedEvent(Long orderId, String mpPaymentId, BigDecimal amount, PaymentMethod paymentMethod) {
+    public void markRefunded() { this.paymentStatus = PaymentStatus.REFUNDED; }
+    public static PaymentQueryEntity fromApprovedEvent(Long orderId, String mpPaymentId, BigDecimal amount, PaymentMethod method) {
+        return fromApprovedEvent(orderId, mpPaymentId, amount, method, PaymentType.ONLINE);
+    }
+    public static PaymentQueryEntity fromApprovedEvent(Long orderId, String mpPaymentId, BigDecimal amount, PaymentMethod paymentMethod, PaymentType type) {
         return PaymentQueryEntity.builder()
                 .orderId(orderId)
                 .mpPaymentId(mpPaymentId)
                 .transactionAmount(amount)
                 .paymentMethod(paymentMethod)
-                .paymentType(PaymentType.ONLINE)
+                .paymentType(type != null ? type : PaymentType.ONLINE)
                 .paymentStatus(PaymentStatus.APPROVED)
                 .installments(1)
                 .createdAt(LocalDateTime.now())

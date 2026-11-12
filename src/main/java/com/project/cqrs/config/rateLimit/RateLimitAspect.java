@@ -1,5 +1,7 @@
 package com.project.cqrs.config.rateLimit;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.Refill;
@@ -21,7 +23,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class RateLimitAspect {
 
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final Cache<String, Bucket> buckets = Caffeine.newBuilder()
+            .expireAfterAccess(Duration.ofMinutes(10))
+            .maximumSize(100_000)
+            .build();
 
     @Around("@annotation(rateLimit)")
     public Object checkRateLimit(ProceedingJoinPoint joinPoint,
@@ -29,20 +34,19 @@ public class RateLimitAspect {
         HttpServletRequest request = ((ServletRequestAttributes)
                 RequestContextHolder.getRequestAttributes()).getRequest();
 
-        String key = request.getRemoteAddr() + ":" +
+        String key = resolveClientKey(request) + ":" +
                 joinPoint.getSignature().toShortString();
 
-        Bucket bucket = buckets.computeIfAbsent(key, k ->
-                Bucket.builder()
-                        .addLimit(Bandwidth.classic(
-                                rateLimit.requests(),
-                                Refill.intervally(
-                                        rateLimit.requests(),
-                                        Duration.ofSeconds(rateLimit.durationSeconds())
-                                )
-                        ))
-                        .build()
-        );
+        Bucket bucket = buckets.getIfPresent(key);
+        if (bucket == null) {
+            bucket = buckets.get(key, k -> Bucket.builder()
+                    .addLimit(Bandwidth.classic(
+                            rateLimit.requests(),
+                            Refill.greedy(rateLimit.requests(),
+                                    Duration.ofSeconds(rateLimit.durationSeconds()))
+                    ))
+                    .build());
+        }
 
         if (bucket.tryConsume(1)) {
             return joinPoint.proceed();
@@ -50,5 +54,23 @@ public class RateLimitAspect {
 
         throw new ResponseStatusException(
                 HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded");
+    }
+
+    /**
+     * Resolve a chave do cliente para o rate limit.
+     *
+     * ATENÇÃO: request.getRemoteAddr() atrás de um proxy/load balancer
+     * (nginx, ALB, Cloudflare) retorna o IP do PRÓPRIO PROXY, não do
+     * cliente real — todo mundo compartilharia o mesmo bucket. Se o
+     * projeto for rodar atrás de proxy reverso, use o header
+     * X-Forwarded-For (com validação — é um header que o cliente
+     * pode forjar se o proxy não sobrescrever).
+     *
+     * Para endpoints autenticados, prefira limitar por userId
+     * (extraído do JWT via SecurityContextHolder) em vez de IP —
+     * mais preciso e imune a NAT compartilhado.
+     */
+    private String resolveClientKey(HttpServletRequest request) {
+        return request.getRemoteAddr();
     }
 }

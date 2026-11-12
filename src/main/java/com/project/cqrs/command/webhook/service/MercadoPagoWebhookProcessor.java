@@ -1,73 +1,41 @@
 package com.project.cqrs.command.webhook.service;
-
-import com.mercadopago.client.payment.PaymentClient;
-import com.mercadopago.exceptions.MPApiException;
-import com.mercadopago.exceptions.MPException;
-import com.mercadopago.resources.payment.Payment;
-import com.project.cqrs.shared.enums.PaymentStatus;
 import com.project.cqrs.command.payment.repository.PaymentCommandRepository;
-import com.project.cqrs.command.payment.service.PaymentApprovalService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.project.cqrs.command.payment.service.*;
+import com.project.cqrs.command.order.repository.OrderCommandRepository;
+import com.project.cqrs.shared.enums.PaymentStatus;
+import com.project.cqrs.config.exception.PaymentException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class MercadoPagoWebhookProcessor {
-
-    private static final Logger log = LoggerFactory.getLogger(MercadoPagoWebhookProcessor.class);
-
-    private final PaymentCommandRepository paymentCommandRepository;
-    private final PaymentApprovalService paymentApprovalService;
-
-    public MercadoPagoWebhookProcessor (PaymentCommandRepository paymentCommandRepository, PaymentApprovalService paymentApprovalService) {
-        this.paymentCommandRepository = paymentCommandRepository;
-        this.paymentApprovalService = paymentApprovalService;
+    private final PaymentCommandRepository payments;
+    private final OrderCommandRepository orders;
+    private final PaymentApprovalService approvals;
+    private final PaymentGateway gateway;
+    @jakarta.persistence.PersistenceContext(unitName = "command") private jakarta.persistence.EntityManager entityManager;
+    public MercadoPagoWebhookProcessor(PaymentCommandRepository payments, OrderCommandRepository orders, PaymentApprovalService approvals, PaymentGateway gateway) {
+        this.payments = payments; this.orders = orders; this.approvals = approvals; this.gateway = gateway;
     }
-
-    @Transactional
+    @Transactional("commandTransactionManager")
     public void processPayment(String mpPaymentId) {
-
-        try {
-            Payment mp = new PaymentClient().get(Long.parseLong(mpPaymentId));
-
-            log.info("Webhoook processando: mpPaymentId={}, status={}", mpPaymentId, mp.getStatus());
-
-            paymentCommandRepository.findByMpPaymentId(mpPaymentId)
-                    .ifPresent(payment -> {
-                        if (payment.getPaymentStatus() == PaymentStatus.APPROVED || payment.getPaymentStatus() == PaymentStatus.REFUNDED) {
-                            log.info("Pagamento {} já processado.", mpPaymentId);
-
-                            return;
-                        }
-
-                        PaymentStatus paymentStatus = mapMpStatus(mp.getStatus());
-
-                        payment.setPaymentStatus(paymentStatus);
-
-                        paymentCommandRepository.save(payment);
-
-                        if (paymentStatus == PaymentStatus.APPROVED) {
-
-                            paymentApprovalService.approve(payment, mpPaymentId);
-
-                        }
-                    });
-        } catch (MPApiException e) {
-            log.error("Erro MP {} {}", e.getStatusCode(), e.getApiResponse().getContent());
-        } catch (MPException e) {
-            log.error("Erro SDK {}", e.getMessage());
+        var mp = gateway.get(mpPaymentId);
+        var payment = payments.findByMpPaymentId(mpPaymentId).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Pagamento ainda não sincronizado"));
+        orders.findByIdForUpdate(payment.getOrder().getOrderId()).orElseThrow(() -> new PaymentException("Pedido não encontrado"));
+        // Reload after taking the order lock: cancellation and checkout use the same lock.
+        entityManager.refresh(payment, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if (payment.getPaymentStatus() == PaymentStatus.REFUNDED) return;
+        if ("approved".equals(mp.getStatus())) {
+            if (payment.getPaymentStatus() != PaymentStatus.APPROVED) approvals.approve(payment, mpPaymentId);
+        } else if (payment.getPaymentStatus() != PaymentStatus.APPROVED) {
+            payment.setPaymentStatus(switch (mp.getStatus()) {
+                case "rejected" -> PaymentStatus.REJECTED;
+                case "cancelled" -> PaymentStatus.CANCELLED;
+                case "refunded" -> PaymentStatus.REFUNDED;
+                case "in_process" -> PaymentStatus.IN_PROCESS;
+                default -> PaymentStatus.PENDING;
+            });
         }
-    }
-
-    private PaymentStatus mapMpStatus(String status) {
-        return switch (status.toLowerCase()) {
-            case "approved" -> PaymentStatus.APPROVED;
-            case "rejected" -> PaymentStatus.REJECTED;
-            case "cancelled" -> PaymentStatus.CANCELLED;
-            case "refunded" -> PaymentStatus.REFUNDED;
-            case "in_process" -> PaymentStatus.IN_PROCESS;
-            default -> PaymentStatus.PENDING;
-        };
+        payments.save(payment);
     }
 }

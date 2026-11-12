@@ -21,7 +21,7 @@ public class CategoryCommandEntity {
     @Column(nullable = false)
     private String categoryName;
 
-    @OneToMany(mappedBy = "categoryCommandEntity", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "categoryCommandEntity")
     private List<ProductCommandEntity> products;
 
     private CategoryCommandEntity(String categoryName) {

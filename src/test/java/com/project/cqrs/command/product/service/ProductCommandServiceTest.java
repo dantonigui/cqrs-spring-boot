@@ -159,7 +159,7 @@ public class ProductCommandServiceTest {
                         1L
                 );
 
-        when(productRepository.findById(productId))
+        when(productRepository.findByIdForUpdate(productId))
                 .thenReturn(Optional.of(productCommandEntity));
 
         when(categoryRepository.findById(anyLong()))
@@ -171,7 +171,7 @@ public class ProductCommandServiceTest {
         productCommandService.updateProduct(productId, dto);
 
         verify(productRepository, times(1))
-                .findById(productId);
+                .findByIdForUpdate(productId);
 
         verify(categoryRepository, times(1))
                 .findById(1L);
@@ -198,7 +198,7 @@ public class ProductCommandServiceTest {
                         1L
                 );
 
-        when(productRepository.findById(productId))
+        when(productRepository.findByIdForUpdate(productId))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
@@ -222,13 +222,13 @@ public class ProductCommandServiceTest {
     @DisplayName("deleteProduct: Deve deletar o produto e publicar o evento")
     void deleteProduct_Success() {
 
-        when(productRepository.findById(1L))
+        when(productRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(productCommandEntity));
 
         productCommandService.deleteProduct(1L);
 
         verify(productRepository, times(1))
-                .findById(1L);
+                .findByIdForUpdate(1L);
 
         verify(productRepository, times(1))
                 .delete(productCommandEntity);
@@ -243,7 +243,7 @@ public class ProductCommandServiceTest {
 
         Long productId = 99L;
 
-        when(productRepository.findById(productId))
+        when(productRepository.findByIdForUpdate(productId))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->

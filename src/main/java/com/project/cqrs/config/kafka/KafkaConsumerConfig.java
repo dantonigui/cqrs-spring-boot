@@ -112,6 +112,7 @@ public class KafkaConsumerConfig {
         factory.getContainerProperties()
                 .setAckMode(ContainerProperties.AckMode.RECORD);
 
+        factory.getContainerProperties().setDeliveryAttemptHeader(true);
         return factory;
     }
 

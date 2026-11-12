@@ -19,7 +19,7 @@ public class DlqReplayGateway {
 
     public DlqReplayGateway(
             DlqConsumerFactory consumerFactory,
-            KafkaTemplate<String, Object> kafkaTemplate
+            @org.springframework.beans.factory.annotation.Qualifier("dlqReplayKafkaTemplate") KafkaTemplate<String, Object> kafkaTemplate
     ) {
         this.consumerFactory = consumerFactory;
         this.kafkaTemplate = kafkaTemplate;
@@ -68,7 +68,14 @@ public class DlqReplayGateway {
                             producerRecord.headers().add(header)
                     );
 
-                    kafkaTemplate.send(producerRecord);
+                    try {
+                        kafkaTemplate.send(producerRecord).get(10, java.util.concurrent.TimeUnit.SECONDS);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Replay interrompido", ex);
+                    } catch (Exception ex) {
+                        throw new IllegalStateException("Kafka não confirmou o replay", ex);
+                    }
 
                     replayed++;
                 }

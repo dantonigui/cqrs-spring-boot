@@ -1,106 +1,24 @@
 package com.project.cqrs.command.payment;
-
 import com.project.cqrs.AbstractIntegrationTest;
-
-import com.project.cqrs.command.order.repository.OrderCommandRepository;
-
-import com.project.cqrs.command.payment.repository.PaymentCommandRepository;
-
-import com.project.cqrs.query.order.repository.OrderQueryRepository;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.*;
-
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-/**
- * Testa o fluxo de webhook de pagamento:
- *
- *   POST /api/v1/command/payments/webhook
- *     → WebhookController (recebe, delega)
- *     → WebhookService (valida tipo, extrai ID)
- *     → MercadoPagoWebhookProcessor (consulta MP*, atualiza PaymentEntity)
- *     → PaymentApprovalService (lock, marca PAID, publica Kafka)
- *     → OrderEventConsumer (atualiza projeção de leitura)
- *
- * * Em teste: MP_ACCESS_TOKEN=TEST, então não faz chamada real.
- *   Usamos @MockBean em PaymentClient para simular a resposta.
- */
-@DisplayName("Fluxo de webhook de pagamento — integração")
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
 class PaymentWebhookFlowIT extends AbstractIntegrationTest {
-
-    @Autowired private TestRestTemplate    restTemplate;
-    @Autowired private OrderCommandRepository orderRepository;
-    @Autowired private PaymentCommandRepository   paymentRepository;
-    @Autowired private OrderQueryRepository orderQueryRepository;
-
-    @Test
-    @DisplayName("webhook deve responder 200 sempre (mesmo com assinatura ausente em dev)")
-    void shouldAlwaysReturn200() {
-        Map<String, Object> body = Map.of(
-                "type", "payment",
-                "data", Map.of("id", "123456")
-        );
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        ResponseEntity<Void> response = restTemplate.postForEntity(
-                "/api/v1/command/payments/webhook",
-                new HttpEntity<>(body, headers),
-                Void.class);
-
-        // Sempre 200 — o MP não deve retentar
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    @Autowired MockMvc mvc;
+    @Test void webhookIsPublicButRequiresValidSignature() throws Exception {
+        mvc.perform(post("/api/v1/webhooks/mercadopago?data.id=123").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"payment\",\"data\":{\"id\":\"123\"}}")).andExpect(status().isUnauthorized());
     }
-
-    @Test
-    @DisplayName("webhook com tipo diferente de payment deve ser ignorado")
-    void shouldIgnoreNonPaymentWebhookType() {
-        Map<String, Object> body = Map.of(
-                "type", "merchant_order",
-                "data", Map.of("id", "789")
-        );
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        ResponseEntity<Void> response = restTemplate.postForEntity(
-                "/api/v1/command/payments/webhook",
-                new HttpEntity<>(body, headers),
-                Void.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        // Nenhum pagamento deve ter sido processado
-        assertThat(paymentRepository.count()).isZero();
+    @Test void adminEndpointsRequireAuthenticationAndRole() throws Exception {
+        mvc.perform(get("/admin/dlq/stats")).andExpect(status().isUnauthorized());
+        mvc.perform(delete("/admin/cache/all").with(user("42")).with(csrf())).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/command/orders/1/checkout/in-person").with(user("42")).with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"method\":\"CASH\"}")).andExpect(status().isForbidden());
     }
-
-    @Test
-    @DisplayName("endpoints admin de cache devem retornar 403 para usuário não ADMIN")
-    void shouldReturn403ForNonAdminOnCacheEndpoints() {
-        // Sem token (não autenticado)
-        ResponseEntity<String> response = restTemplate.exchange(
-                "/admin/cache/all",
-                HttpMethod.DELETE,
-                HttpEntity.EMPTY,
-                String.class);
-
-        // Deve ser 401 (não autenticado) ou 403 (sem role ADMIN)
-        assertThat(response.getStatusCode().value())
-                .isIn(401, 403);
-    }
-
-    @Test
-    @DisplayName("endpoints admin de DLQ devem retornar 401/403 sem autenticação")
-    void shouldReturn401Or403ForNonAdminOnDlqEndpoints() {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-                "/admin/dlq/stats", String.class);
-
-        assertThat(response.getStatusCode().value())
-                .isIn(401, 403);
+    @Test void csrfRequiredForCookieAuthenticatedMutations() throws Exception {
+        mvc.perform(post("/api/v1/command/orders").with(user("42")).contentType(MediaType.APPLICATION_JSON).content("{\"items\":[]}")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/csrf")).andExpect(status().isOk()).andExpect(jsonPath("token").isNotEmpty());
     }
 }

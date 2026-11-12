@@ -9,5 +9,6 @@ public interface ProcessedEventRepository extends JpaRepository<ProcessedEventEn
 
     boolean existsByEventIdAndTopic(String eventId, String topic);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<ProcessedEventEntity> findByEventIdAndTopic(String eventId, String topic);
 }

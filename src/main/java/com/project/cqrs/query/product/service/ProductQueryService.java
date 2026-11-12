@@ -31,7 +31,7 @@ public class ProductQueryService {
             key = "'page-' + #pageable.pageNumber + '-size-' + #pageable.pageSize + '-sort-' + #pageable.sort.toString()",
             unless = "#result == null"
     )
-    @Transactional(readOnly = true)
+    @Transactional(transactionManager = "queryTransactionManager", readOnly = true)
     public PageResponseDTO<ProductQueryDTO> findAll(Pageable pageable) {
 
         log.debug("Cache MISS — buscando produtos no MySQL. Page: {}", pageable.getPageNumber());
@@ -44,9 +44,9 @@ public class ProductQueryService {
     @Cacheable(
             cacheNames = CacheTopics.CACHE_PRODUCT_DETAILS,
             key = "#id",
-            unless = "#result == null || #result.isEmpty()"
+            unless = "#result == null"
     )
-    @Transactional(readOnly = true)
+    @Transactional(transactionManager = "queryTransactionManager", readOnly = true)
     public ProductQueryDTO findById(Long id) {
         return productRepository.findById(id)
                 .map(ProductQueryDTO::from)
@@ -56,10 +56,10 @@ public class ProductQueryService {
     @Cacheable(
             cacheNames = CacheTopics.CACHE_PRODUCTS,
             key = "'category-' + #categoryId + '-page-' + #pageable.pageNumber "
-                    + "+ '-size-' + #pageable.pageSize",
-            unless = "#result == null || #result.isEmpty()"
+                    + "+ '-size-' + #pageable.pageSize + '-sort-' + #pageable.sort.toString()",
+            unless = "#result == null"
     )
-    @Transactional(readOnly = true)
+    @Transactional(transactionManager = "queryTransactionManager", readOnly = true)
     public PageResponseDTO<ProductQueryDTO> findByCategoryId(Long categoryId, Pageable pageable) {
          Page <ProductQueryDTO> page = productRepository.findByCategoryId(categoryId,pageable).map(ProductQueryDTO::from);
 

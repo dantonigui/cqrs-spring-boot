@@ -52,7 +52,8 @@ class OrderEventConsumerTest {
         consumer = new OrderEventConsumer(
                 orderQueryRepository,
                 orderQueryService,
-                idempotencyService
+                idempotencyService,
+                org.mockito.Mockito.mock(com.project.cqrs.query.payment.repository.PaymentQueryRepository.class)
         );
     }
 
@@ -166,7 +167,7 @@ class OrderEventConsumerTest {
                     .markCompleted(processed);
 
             verify(idempotencyService, never())
-                    .markFailed(any());
+                    .markFailed(any(), any(Exception.class));
         }
 
         @Test
@@ -199,7 +200,7 @@ class OrderEventConsumerTest {
             );
 
             verify(idempotencyService)
-                    .markFailed(processed);
+                    .markFailed(eq(processed), any(Exception.class));
 
             verify(idempotencyService, never())
                     .markCompleted(processed);
@@ -236,7 +237,7 @@ class OrderEventConsumerTest {
             );
 
             verify(idempotencyService)
-                    .markFailed(processed);
+                    .markFailed(eq(processed), any(Exception.class));
         }
     }
 
@@ -295,7 +296,7 @@ class OrderEventConsumerTest {
                     DELIVERY_ATTEMPT
             )).thenReturn(processed);
 
-            when(orderQueryRepository.findByOrderId(ORDER_ID))
+            when(orderQueryRepository.findByOrderIdForUpdate(ORDER_ID))
                     .thenReturn(Optional.of(order));
 
             consumer.onOrderStatusChanged(
@@ -319,7 +320,7 @@ class OrderEventConsumerTest {
                     .markCompleted(processed);
 
             verify(idempotencyService, never())
-                    .markFailed(any());
+                    .markFailed(any(), any(Exception.class));
         }
 
         @Test
@@ -337,7 +338,7 @@ class OrderEventConsumerTest {
                     DELIVERY_ATTEMPT
             )).thenReturn(processed);
 
-            when(orderQueryRepository.findByOrderId(ORDER_ID))
+            when(orderQueryRepository.findByOrderIdForUpdate(ORDER_ID))
                     .thenReturn(Optional.empty());
 
             assertThrows(
@@ -349,7 +350,7 @@ class OrderEventConsumerTest {
             );
 
             verify(idempotencyService)
-                    .markFailed(processed);
+                    .markFailed(eq(processed), any(Exception.class));
 
             verify(idempotencyService, never())
                     .markCompleted(processed);
@@ -372,7 +373,7 @@ class OrderEventConsumerTest {
                     DELIVERY_ATTEMPT
             )).thenReturn(processed);
 
-            when(orderQueryRepository.findByOrderId(ORDER_ID))
+            when(orderQueryRepository.findByOrderIdForUpdate(ORDER_ID))
                     .thenReturn(Optional.of(order));
 
             when(orderQueryRepository.save(order))
@@ -387,7 +388,7 @@ class OrderEventConsumerTest {
             );
 
             verify(idempotencyService)
-                    .markFailed(processed);
+                    .markFailed(eq(processed), any(Exception.class));
 
             verify(idempotencyService, never())
                     .markCompleted(processed);
@@ -410,7 +411,7 @@ class OrderEventConsumerTest {
                     DELIVERY_ATTEMPT
             )).thenReturn(processed);
 
-            when(orderQueryRepository.findByOrderId(ORDER_ID))
+            when(orderQueryRepository.findByOrderIdForUpdate(ORDER_ID))
                     .thenReturn(Optional.of(order));
 
             doThrow(new RuntimeException("Redis unavailable"))
@@ -426,7 +427,7 @@ class OrderEventConsumerTest {
             );
 
             verify(idempotencyService)
-                    .markFailed(processed);
+                    .markFailed(eq(processed), any(Exception.class));
 
             verify(idempotencyService, never())
                     .markCompleted(processed);
@@ -489,7 +490,7 @@ class OrderEventConsumerTest {
                     DELIVERY_ATTEMPT
             )).thenReturn(processed);
 
-            when(orderQueryRepository.findByOrderId(ORDER_ID))
+            when(orderQueryRepository.findByOrderIdForUpdate(ORDER_ID))
                     .thenReturn(Optional.of(order));
 
             consumer.onOrderCancelled(
@@ -513,7 +514,7 @@ class OrderEventConsumerTest {
                     .markCompleted(processed);
 
             verify(idempotencyService, never())
-                    .markFailed(any());
+                    .markFailed(any(), any(Exception.class));
         }
 
         @Test
@@ -531,7 +532,7 @@ class OrderEventConsumerTest {
                     DELIVERY_ATTEMPT
             )).thenReturn(processed);
 
-            when(orderQueryRepository.findByOrderId(ORDER_ID))
+            when(orderQueryRepository.findByOrderIdForUpdate(ORDER_ID))
                     .thenReturn(Optional.empty());
 
             assertThrows(
@@ -543,7 +544,7 @@ class OrderEventConsumerTest {
             );
 
             verify(idempotencyService)
-                    .markFailed(processed);
+                    .markFailed(eq(processed), any(Exception.class));
 
             verify(idempotencyService, never())
                     .markCompleted(processed);
@@ -566,7 +567,7 @@ class OrderEventConsumerTest {
                     DELIVERY_ATTEMPT
             )).thenReturn(processed);
 
-            when(orderQueryRepository.findByOrderId(ORDER_ID))
+            when(orderQueryRepository.findByOrderIdForUpdate(ORDER_ID))
                     .thenReturn(Optional.of(order));
 
             when(orderQueryRepository.save(order))
@@ -581,7 +582,7 @@ class OrderEventConsumerTest {
             );
 
             verify(idempotencyService)
-                    .markFailed(processed);
+                    .markFailed(eq(processed), any(Exception.class));
 
             verify(idempotencyService, never())
                     .markCompleted(processed);
@@ -604,7 +605,7 @@ class OrderEventConsumerTest {
                     DELIVERY_ATTEMPT
             )).thenReturn(processed);
 
-            when(orderQueryRepository.findByOrderId(ORDER_ID))
+            when(orderQueryRepository.findByOrderIdForUpdate(ORDER_ID))
                     .thenReturn(Optional.of(order));
 
             doThrow(new RuntimeException("Redis unavailable"))
@@ -620,7 +621,7 @@ class OrderEventConsumerTest {
             );
 
             verify(idempotencyService)
-                    .markFailed(processed);
+                    .markFailed(eq(processed), any(Exception.class));
 
             verify(idempotencyService, never())
                     .markCompleted(processed);

@@ -13,6 +13,9 @@ public final class  ProductCreateEvent extends ProductEvent {
     private BigDecimal productPrice;
     private String productImage;
     private Long categoryId;
+    private Integer stock = 0;
+    public Integer getStock() { return stock; }
+    public void setStock(Integer stock) { this.stock = stock; }
 
     //Constructors
     public ProductCreateEvent(Long productId, String productName, String productCode, BigDecimal productPrice, String productImage, Long categoryId) {
@@ -47,7 +50,7 @@ public final class  ProductCreateEvent extends ProductEvent {
                             .getCategoryId();
 
         }
-        return new ProductCreateEvent(
+        ProductCreateEvent event = new ProductCreateEvent(
                 productEntity.getProductId(),
                 productEntity.getProductName(),
                 productEntity.getProductCode(),
@@ -55,5 +58,7 @@ public final class  ProductCreateEvent extends ProductEvent {
                 productEntity.getProductImage(),
                 categoryId
         );
+        event.setStock(productEntity.getStock());
+        return event;
     }
 }
