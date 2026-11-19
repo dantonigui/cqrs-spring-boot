@@ -1,115 +1,123 @@
-# CQRS — Catálogo, pedidos e pagamentos
+# E-commerce CQRS Backend
 
-Backend de loja com catálogo, reserva de estoque, pedidos e pagamentos PIX, cartão e presenciais. Usa Java 21, Spring Boot 3.5.12, dois MySQL, Kafka e Redis. O frontend é externo a este repositório.
+A Java backend for an online store with product catalog, inventory, orders, checkout, and payment workflows. The frontend is maintained separately.
 
-## Como funciona
+## Architecture overview
 
-O lado `command` valida regras e grava a fonte de verdade. Alteração de negócio e evento são persistidos juntos na outbox. Um dispatcher publica no Kafka; consumers atualizam o banco `query`, invalidam caches e enviam notificações. A leitura tem consistência eventual: uma consulta pode demorar a refletir um comando aceito.
+The command side validates business operations and writes to the source database. Business changes and events are recorded together through an outbox. A dispatcher publishes events to Kafka, and consumers update query projections, invalidate caches, and trigger notifications. Read models are eventually consistent and may take time to reflect a successful command.
 
 ```mermaid
 flowchart LR
-  UI[Frontend] --> API[API Spring Boot]
+  UI[Frontend] --> API[Spring Boot API]
   API --> C[(MySQL command + outbox)]
   C --> D[Dispatcher]
   D --> K[Kafka]
-  K --> P[Projeções e notificações]
+  K --> P[Projections and notifications]
   P --> Q[(MySQL query)]
   API --> Q
-  API --> R[(Redis: cache e sessões)]
-  API --> G[Google OAuth2]
+  API --> R[(Redis cache and sessions)]
+  API --> G[Google OAuth 2.0]
   API --> MP[Mercado Pago]
   P --> SMTP[SMTP]
 ```
 
-## Funcionalidades
+## Features
 
-- Login Google, JWT em cookies HttpOnly, refresh rotativo e sessões revogáveis no Redis.
-- Papéis `USER` e `ADMIN`, CSRF e autorização por proprietário do pedido.
-- Categorias, produtos, reposição e reserva transacional de estoque.
-- Checkout PIX, cartão e presencial; webhook e cancelamento com estorno quando aplicável.
-- Expiração automática de reservas não pagas e e-mails de pagamento/cancelamento.
-- Consultas paginadas, cache e administração de DLQ e cache.
+- Google OAuth 2.0 login with JWTs in HttpOnly cookies, rotating refresh tokens, and revocable Redis-backed sessions.
+- User and administrator roles, CSRF protection, and order ownership checks.
+- Product and category management, inventory restocking, and transactional stock reservations.
+- PIX, card, and in-person checkout flows, including payment webhooks and applicable refunds.
+- Automatic expiration of unpaid reservations and payment/cancellation email notifications.
+- Paginated queries, caching, and administrative dead-letter queue and cache operations.
 
-## Executar localmente
+## Technology
 
-Instale Docker com Compose v2. Para executar a API no host, use JDK 21 e Maven Wrapper. O Dockerfile fornece o ambiente Java para execução em contêiner.
+- Java 21 and Spring Boot 3
+- MySQL command and query databases
+- Kafka and transactional outbox
+- Redis for cache and sessions
+- Google OAuth 2.0, Mercado Pago, and SMTP
+- Docker Compose, Maven Wrapper, Swagger/OpenAPI
+
+## Run locally
+
+Prerequisites: Docker with Compose v2. To run the API on the host, install JDK 21 and use the Maven Wrapper.
+
+```bash
+cp .env.example .env
+# Set values as described in docs/configuration.md.
+docker compose up -d --wait
+./mvnw spring-boot:run
+```
+
+On Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
-# Configure os valores conforme docs/configuration.md.
 docker compose up -d --wait
 .\mvnw.cmd spring-boot:run
 ```
 
-No Linux/macOS, use `cp .env.example .env` e `./mvnw spring-boot:run`.
+To run the API in Docker as well:
 
-Infraestrutura e API no Docker:
-
-```powershell
+```bash
 docker compose --profile app up --build -d --wait
 ```
 
-Preencha credenciais próprias de bancos, Redis, Google, JWT, Mercado Pago e SMTP. O exemplo contém placeholders. O Compose não inclui frontend nem SMTP. Veja [configuração](docs/configuration.md) e [Docker local](docs/testing/docker-local.md).
+Set your own credentials for the databases, Redis, Google, JWT, Mercado Pago, and SMTP. The Compose setup does not include a frontend or SMTP server.
 
-| Serviço | Endereço padrão no host |
+| Service | Local address |
 |---|---|
 | API | `http://localhost:8080` |
-| Swagger / OpenAPI | `http://localhost:8080/swagger` / `http://localhost:8080/api-docs` |
-| Saúde | `http://localhost:8080/actuator/health` |
-| Login | `http://localhost:8080/oauth2/authorization/google` |
+| Swagger UI / OpenAPI | `http://localhost:8080/swagger` / `http://localhost:8080/api-docs` |
+| Health check | `http://localhost:8080/actuator/health` |
+| Google login | `http://localhost:8080/oauth2/authorization/google` |
 | MySQL command / query | `localhost:3307` / `localhost:3308` |
 | Kafka / Redis | `localhost:9092` / `localhost:6379` |
 
-## Frontend e autenticação
+## Frontend integration
 
-Use a origem de `APP_FRONTEND_URL` e `credentials: 'include'`. Inicie o login por navegação à rota Google. Depois consulte `/api/v1/query/auth/me`. Antes de POST, PUT ou DELETE, obtenha `/api/v1/csrf` e envie o token no cabeçalho retornado.
+Use the origin configured in `APP_FRONTEND_URL` and send requests with `credentials: 'include'`. Begin login by navigating to the Google authorization route. After login, request `/api/v1/query/auth/me`. For POST, PUT, and DELETE requests, retrieve `/api/v1/csrf` and send the returned token in the indicated header.
 
-Cada JWT contém um identificador de sessão validado no Redis. Logout revoga a sessão atual; `logout-all` revoga todas as sessões do usuário. A API não usa sessão HTTP para autenticar chamadas. Veja [controle de acesso](docs/business-rules/access-control.md) e [integração do frontend](docs/api/frontend-integration.md).
+Each JWT contains a session identifier that is checked in Redis. Logout revokes the current session; `logout-all` revokes all sessions for the user. The API does not use an HTTP session to authenticate requests. See the [frontend integration guide](docs/api/frontend-integration.md).
 
-## Estrutura
+## Project structure
 
-Os pacotes Java ficam em `src/main/java/com/project/cqrs/`.
+The Java packages are located at `src/main/java/com/project/cqrs/`.
 
-| Diretório | Responsabilidade |
+| Path | Responsibility |
 |---|---|
-| `command/` | Autenticação, catálogo, estoque, pedidos, pagamentos, webhook e outbox |
-| `query/` | Projeções, consumers e consultas |
-| `admin/` | Cache, DLQ e idempotência |
-| `notification/` | Templates e envio de e-mails |
-| `config/` | Segurança, bancos, Kafka, Redis, rate limit e erros |
-| `shared/` | Eventos, enums, tópicos e DTOs |
-| `src/main/resources/db/migration/` | Migrações ativas dos dois bancos |
-| `src/test/java/` | Testes unitários, de segurança e integração |
-| `docs/` | Documentação técnica e operacional |
+| `command/` | Authentication, catalog, inventory, orders, payments, webhooks, and outbox |
+| `query/` | Read projections, consumers, and queries |
+| `admin/` | Cache, dead-letter queue, and idempotency operations |
+| `notification/` | Email templates and delivery |
+| `config/` | Security, databases, Kafka, Redis, rate limits, and errors |
+| `shared/` | Events, enums, topics, and DTOs |
+| `src/main/resources/db/migration/` | Database migrations |
+| `src/test/java/` | Unit, security, and integration tests |
+| `docs/` | Technical and operational documentation |
 
-## Build e testes
+## Build and tests
 
-```powershell
-.\mvnw.cmd test
-.\mvnw.cmd verify
-.\mvnw.cmd package
+```bash
+./mvnw test
+./mvnw verify
+./mvnw package
 ```
 
-`test` executa `*Test`, incluindo sessões em Redis via Testcontainers. `verify` acrescenta `*IT`, com dois MySQL, Kafka e Redis. Docker é necessário à cobertura completa. O Dockerfile gera o JAR sem executar testes.
+The full integration suite requires Docker. See the [testing strategy](docs/testing/testing-strategy.md).
 
-Na última validação da autenticação, 38 testes passaram, incluindo Redis real. A execução geral foi bloqueada por chamadas a `CategoryRepository.findByIdForUpdate` nos testes de produtos; esse método não está definido na interface. Veja [estratégia de testes](docs/testing/testing-strategy.md).
+## Documentation
 
-## Documentação
+Start with the [documentation index](docs/README.md).
 
-Comece pelo [índice completo](docs/README.md).
+- [Backend architecture](docs/architecture/backend-architecture.md)
+- [Configuration](docs/configuration.md)
+- [API reference](docs/api/current-api-reference.md)
+- [Business rules](docs/business-rules/business-rules.md)
+- [Database model](docs/database/data-model.md)
+- [Operations](docs/deployment/operations.md)
 
-| Tema | Guia |
-|---|---|
-| Arquitetura e transações | [Backend](docs/architecture/backend-architecture.md) |
-| Variáveis e integrações | [Configuração](docs/configuration.md) |
-| Endpoints e payloads | [API](docs/api/current-api-reference.md) |
-| Regras de negócio | [Regras consolidadas](docs/business-rules/business-rules.md) |
-| Casos de uso | [Atores e fluxos](docs/use-cases/README.md) |
-| Estoque e expiração | [Pedidos](docs/business-rules/orders-and-stock.md) |
-| Checkout e devolução | [Pagamentos](docs/business-rules/payments.md) |
-| Bancos e migrações | [Dados](docs/database/data-model.md) |
-| Diagnóstico e produção | [Operação](docs/deployment/operations.md) |
+## Current limitations
 
-## Limites atuais
-
-Eventos têm entrega pelo menos uma vez. Não há transação distribuída entre MySQL, Kafka, Redis, Mercado Pago e SMTP. E-mails podem ser repetidos após falhas. Redis é necessário à autenticação; scripts de sessão pressupõem standalone. Rate limit é local por instância. Consulte os guias antes de alterar a topologia.
+Events are delivered at least once. There is no distributed transaction across MySQL, Kafka, Redis, Mercado Pago, and SMTP. Email delivery may be repeated after failures. Redis is required for authentication, the session scripts assume standalone Redis, and rate limiting is local to each application instance.
