@@ -30,14 +30,34 @@ flowchart LR
 - Automatic expiration of unpaid reservations and payment/cancellation email notifications.
 - Paginated queries, caching, and administrative dead-letter queue and cache operations.
 
-## Technology
+## Technology and how it is used
 
-- Java 21 and Spring Boot 3
-- MySQL command and query databases
-- Kafka and transactional outbox
-- Redis for cache and sessions
-- Google OAuth 2.0, Mercado Pago, and SMTP
-- Docker Compose, Maven Wrapper, Swagger/OpenAPI
+| Technology | Role in this project |
+|---|---|
+| **Java 21** | Main language for the backend, business rules, API endpoints, and asynchronous consumers. |
+| **Spring Boot 3** | Runs the REST API and organizes the application into command, query, administration, configuration, and notification areas. |
+| **Spring Security** | Applies authentication, authorization, role checks, CSRF protection, and ownership checks for order access. |
+| **Google OAuth 2.0** | Provides the user sign-in flow. After authentication, the API issues its own application tokens. |
+| **JWT and HttpOnly cookies** | Carry authenticated identity to the frontend. Refresh tokens rotate, and JWT session identifiers are checked against Redis so sessions can be revoked. |
+| **MySQL (command database)** | Stores the authoritative business state for changes such as orders and inventory. The outbox record is written in the same database transaction as the business change. |
+| **MySQL (query database)** | Stores read projections optimized for queries. Because Kafka consumers update these projections asynchronously, reads can be eventually consistent. |
+| **Transactional outbox** | Prevents a committed business change from being lost between the database and message broker: the event is first saved with the business transaction, then a dispatcher publishes it. |
+| **Apache Kafka** | Carries domain events from the command side to consumers. Consumers update read projections, invalidate related caches, and trigger notifications. Delivery is at least once, so downstream processing must account for retries. |
+| **Redis** | Supports session lookup and revocation, application caching, and related cache administration. Redis is required for authentication in this setup. |
+| **Mercado Pago** | Connects checkout and payment flows to an external provider, including webhook-driven payment updates. |
+| **SMTP** | Delivers payment and cancellation email notifications from asynchronous notification workflows. |
+| **Docker Compose** | Starts the local infrastructure used during development, including the databases, Kafka, and Redis. |
+| **Maven Wrapper** | Builds and runs the application with the project's Maven configuration without requiring a separately installed Maven version. |
+| **Swagger / OpenAPI** | Publishes interactive API documentation for exploring the endpoints and request/response contracts. |
+| **Spring Boot Actuator** | Exposes the application's health endpoint for local operational checks. |
+
+### How the pieces work together
+
+A command request is validated and handled by the Spring Boot API. The API commits the business update and its outbox event together in MySQL. A dispatcher publishes the event to Kafka; consumers then update the query-side MySQL projections and run follow-up work such as cache invalidation or email delivery.
+
+Redis serves a separate purpose from Kafka: Kafka transports events between workflows, while Redis provides fast session and cache lookups. The two MySQL databases also have different responsibilities: the command database is the source of truth, and the query database serves read models.
+
+The architecture does not provide a distributed transaction across MySQL, Kafka, Redis, Mercado Pago, and SMTP. Events are delivered at least once, email delivery may be repeated after failures, and the current rate limit is local to each application instance.
 
 ## Run locally
 
